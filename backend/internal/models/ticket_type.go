@@ -10,18 +10,18 @@ import (
 // TicketType represents a type of ticket for an event
 type TicketType struct {
 	Base
-	EventID           uint           `json:"event_id"`
-	Name              string         `gorm:"type:varchar(100);not null" json:"name"`
-	Description       string         `gorm:"type:text" json:"description"`
-	Price             float64        `gorm:"type:decimal(10,2);not null" json:"price"`
-	QuantityAvailable int            `gorm:"not null" json:"quantity_available"`
-	IsVIP             bool           `gorm:"default:false" json:"is_vip"`
-	SaleStartDate     *time.Time     `json:"sale_start_date,omitempty"`
-	SaleEndDate       *time.Time     `json:"sale_end_date,omitempty"`
-	
-	// Relationships
-	Event             Event          `gorm:"foreignKey:EventID" json:"-"`
-	Registrations     []Registration `gorm:"foreignKey:TicketTypeID" json:"-"`
+	EventID           uint       `json:"event_id"`
+	Name              string     `gorm:"type:varchar(100);not null" json:"name"`
+	Description       string     `gorm:"type:text" json:"description"`
+	Price             float64    `gorm:"type:numeric(10,2);not null" json:"price"`
+	QuantityAvailable int        `gorm:"not null" json:"quantity_available"`
+	IsVIP             bool       `gorm:"default:false" json:"is_vip"`
+	SaleStartDate     *time.Time `gorm:"type:datetime" json:"sale_start_date,omitempty"`
+	SaleEndDate       *time.Time `gorm:"type:datetime" json:"sale_end_date,omitempty"`
+
+	//Relationships
+	Event         Event          `gorm:"foreignKey:EventID" json:"-"`
+	Registrations []Registration `gorm:"foreignKey:TicketTypeID" json:"-"`
 }
 
 // TableName specifies the table name for TicketType model
@@ -32,37 +32,37 @@ func (TicketType) TableName() string {
 // IsOnSale checks if the ticket is currently on sale
 func (t *TicketType) IsOnSale() bool {
 	now := time.Now()
-	
+
 	// If no sale dates are specified, then always on sale
 	if t.SaleStartDate == nil && t.SaleEndDate == nil {
 		return true
 	}
-	
+
 	// Check start date if specified
 	if t.SaleStartDate != nil && now.Before(*t.SaleStartDate) {
 		return false
 	}
-	
+
 	// Check end date if specified
 	if t.SaleEndDate != nil && now.After(*t.SaleEndDate) {
 		return false
 	}
-	
+
 	return true
 }
 
 // GetAvailableQuantity returns the number of tickets still available
 func (t *TicketType) GetAvailableQuantity(db *gorm.DB) (int, error) {
 	var soldCount int64
-	
+
 	err := db.Model(&Registration{}).
 		Where("ticket_type_id = ? AND status != ?", t.ID, "canceled").
 		Count(&soldCount).Error
-	
+
 	if err != nil {
 		return 0, err
 	}
-	
+
 	return t.QuantityAvailable - int(soldCount), nil
 }
 
@@ -95,11 +95,11 @@ func CreateTicketType(db *gorm.DB, eventID uint, name, description string, price
 		SaleStartDate:     saleStart,
 		SaleEndDate:       saleEnd,
 	}
-	
+
 	result := db.Create(&ticketType)
 	if result.Error != nil {
 		return nil, result.Error
 	}
-	
+
 	return &ticketType, nil
 }

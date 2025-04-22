@@ -36,9 +36,7 @@ func main() {
 	// Create handlers
 	userHandler := handlers.NewUserHandler()
 	eventHandler := handlers.NewEventHandler()
-
-	r.GET("/events", eventHandler.ListEvents)
-	r.GET("/events/:id", eventHandler.GetEvent)
+	ticketTypeHandler := handlers.NewTicketTypeHandler()
 
 	// health check route / check if server alive
 	r.GET("/health", func(c *gin.Context) {
@@ -52,7 +50,9 @@ func main() {
 	// Public routes
 	r.POST("/register", userHandler.RegisterUser)
 	r.POST("/login", userHandler.LoginUser)
-
+	r.GET("/events/:id/ticket-types", ticketTypeHandler.GetTicketTypes)
+	r.GET("/events", eventHandler.ListEvents)
+	r.GET("/events/:id", eventHandler.GetEvent)
 	// Protected routes
 	authorized := r.Group("/")
 	authorized.Use(middleware.AuthMiddleware())
@@ -79,6 +79,9 @@ func main() {
 			organizer.DELETE("/:id", eventHandler.DeleteEvent)
 			organizer.PUT("/:id/publish", eventHandler.PublishEvent)
 			organizer.PUT("/:id/cancel", eventHandler.CancelEvent)
+			organizer.POST("/:id/ticket-types", ticketTypeHandler.CreateTicketType)
+			organizer.PUT("/:id/ticket-types/:ticket_id", ticketTypeHandler.UpdateTicketType)
+			organizer.DELETE("/:id/ticket-types/:ticket_id", ticketTypeHandler.DeleteTicketType)
 		}
 	}
 
