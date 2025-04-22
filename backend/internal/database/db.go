@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -35,6 +36,8 @@ func Initialize() (*gorm.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
+
+	DB.Exec("PRAGMA foreign_keys = ON")
 
 	fmt.Println("Database connected successfully")
 	return DB, nil
