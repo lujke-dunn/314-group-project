@@ -37,6 +37,9 @@ func main() {
 	userHandler := handlers.NewUserHandler()
 	eventHandler := handlers.NewEventHandler()
 	ticketTypeHandler := handlers.NewTicketTypeHandler()
+	registrationHandler := handlers.NewRegistrationHandler()
+	paymentHandler := handlers.NewPaymentHandler()
+	feedbackHandler := handlers.NewFeedbackHandler()
 
 	// health check route / check if server alive
 	r.GET("/health", func(c *gin.Context) {
@@ -61,6 +64,19 @@ func main() {
 		authorized.GET("/profile", userHandler.GetProfile)
 		authorized.PUT("/profile", userHandler.UpdateProfile)
 		authorized.POST("/change-password", userHandler.ChangePassword)
+		authorized.POST("/registrations", registrationHandler.CreateRegistration)
+		authorized.GET("/registrations", registrationHandler.GetUserRegistrations)
+		authorized.GET("/registrations/:id", registrationHandler.GetRegistrationDetails)
+		authorized.PUT("/registrations/:id/cancel", registrationHandler.CancelRegistration)
+
+		authorized.POST("/registrations/:id/payments", paymentHandler.ProcessPayment)
+		authorized.GET("/registrations/:id/payments", paymentHandler.GetPayments)
+
+		authorized.POST("/events/:id/feedback", feedbackHandler.CreateFeedback)
+		authorized.GET("/events/:id/feedback", feedbackHandler.GetEventFeedback)
+		authorized.GET("/feedback", feedbackHandler.GetUserFeedback)
+		authorized.PUT("/feedback/:id", feedbackHandler.UpdateFeedback)
+		authorized.DELETE("/feedback/:id", feedbackHandler.DeleteFeedback)
 
 		// Admin routes
 		admin := authorized.Group("/admin")
