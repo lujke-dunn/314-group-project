@@ -51,21 +51,75 @@ func MigrateSchema() error {
 		return fmt.Errorf("failed to create ticket_types table: %w", err)
 	}
 
-	return nil
+	//return nil
 
 	// Comment out the rest for now so sad migration no workok
+
+	err = DB.Exec(`
+        CREATE TABLE IF NOT EXISTS registrations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at DATETIME,
+            updated_at DATETIME,
+            deleted_at DATETIME,
+            user_id INTEGER NOT NULL,
+            event_id INTEGER NOT NULL,
+            ticket_type_id INTEGER NOT NULL,
+            total_price DECIMAL(10,2) NOT NULL,
+            status VARCHAR(20) DEFAULT 'pending',
+            FOREIGN KEY (user_id) REFERENCES users(id),
+            FOREIGN KEY (event_id) REFERENCES events(id),
+            FOREIGN KEY (ticket_type_id) REFERENCES ticket_types(id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_registrations_deleted_at ON registrations(deleted_at);
+    `).Error
+
+	if err != nil {
+		return fmt.Errorf("failed to create registrations table: %w", err)
+	}
+
+	err = DB.Exec(`
+        CREATE TABLE IF NOT EXISTS payments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at DATETIME,
+            updated_at DATETIME,
+            deleted_at DATETIME,
+            registration_id INTEGER NOT NULL,
+            amount DECIMAL(10,2) NOT NULL,
+            status VARCHAR(20) DEFAULT 'pending',
+            method VARCHAR(20),
+            transaction_id VARCHAR(255),
+            payment_date DATETIME,
+            FOREIGN KEY (registration_id) REFERENCES registrations(id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_payments_deleted_at ON payments(deleted_at);
+    `).Error
+
+	if err != nil {
+		return fmt.Errorf("failed to create payments table: %w", err)
+	}
+
+	err = DB.Exec(`
+		CREATE TABLE IF NOT EXISTS event_feedbacks (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			created_at DATETIME,
+			updated_at DATETIME,
+			deleted_at DATETIME, 
+			event_id INTEGER NOT NULL,
+			user_id INTEGER NOT NULL,
+			rating INTEGER NOT NULL, 
+			comment TEXT,
+			FOREIGN KEY (event_id) REFERENCES events(id),
+			FOREIGN KEY (user_id) REFERENCES users(id)
+		);
+	`).Error
+
+	if err != nil {
+		return fmt.Errorf("failed to create event feedback table: %w", err)
+	}
+
+	return nil
+
 	/*
-		if err := DB.AutoMigrate(&models.Registration{}); err != nil {
-			return err
-		}
-
-		if err := DB.AutoMigrate(&models.Payment{}); err != nil {
-			return err
-		}
-
-		if err := DB.AutoMigrate(&models.EventUpdate{}); err != nil {
-			return err
-		}
 
 		if err := DB.AutoMigrate(&models.Notification{}); err != nil {
 			return err
