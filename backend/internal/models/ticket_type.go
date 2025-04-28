@@ -15,7 +15,7 @@ type TicketType struct {
 	Description       string     `gorm:"type:text" json:"description"`
 	Price             float64    `gorm:"type:numeric(10,2);not null" json:"price"`
 	QuantityAvailable int        `gorm:"not null" json:"quantity_available"`
-	IsVIP             bool       `gorm:"default:false" json:"is_vip"`
+	IsVIP             bool       `gorm:"column:is_vip;default:false" json:"is_vip"`
 	SaleStartDate     *time.Time `gorm:"type:datetime" json:"sale_start_date,omitempty"`
 	SaleEndDate       *time.Time `gorm:"type:datetime" json:"sale_end_date,omitempty"`
 
