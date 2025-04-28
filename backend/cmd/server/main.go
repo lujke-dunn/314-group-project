@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 
 	//"github.com/golang-jwt/jwt/v5"
@@ -21,6 +22,14 @@ func main() {
 	// Set up Gin
 	r := gin.Default()
 
+	r.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"http://localhost:5173"}, // Your Vite dev server URL
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
 	// Initialize database
 	_, err := database.Initialize()
 	if err != nil {
@@ -40,6 +49,7 @@ func main() {
 	registrationHandler := handlers.NewRegistrationHandler()
 	paymentHandler := handlers.NewPaymentHandler()
 	feedbackHandler := handlers.NewFeedbackHandler()
+	statisticsHandler := handlers.NewStatisticsHandler()
 
 	// health check route / check if server alive
 	r.GET("/health", func(c *gin.Context) {
@@ -84,20 +94,24 @@ func main() {
 		{
 			admin.GET("/users", userHandler.ListUsers)
 			admin.GET("/users/:id", userHandler.GetUserByID)
+			admin.GET("/stats", statisticsHandler.GetSystemStats)
 		}
+
+		authorized.POST("/events/create", eventHandler.CreateEvent)
+		authorized.PUT("/events/:id/publish", eventHandler.PublishEvent)
 
 		// Organizer routes - specifically for event management
 		organizer := authorized.Group("/events")
 		organizer.Use(middleware.OrganizerRequired())
 		{
-			organizer.POST("", eventHandler.CreateEvent)
+
 			organizer.PUT("/:id", eventHandler.UpdateEvent)
 			organizer.DELETE("/:id", eventHandler.DeleteEvent)
-			organizer.PUT("/:id/publish", eventHandler.PublishEvent)
 			organizer.PUT("/:id/cancel", eventHandler.CancelEvent)
 			organizer.POST("/:id/ticket-types", ticketTypeHandler.CreateTicketType)
 			organizer.PUT("/:id/ticket-types/:ticket_id", ticketTypeHandler.UpdateTicketType)
 			organizer.DELETE("/:id/ticket-types/:ticket_id", ticketTypeHandler.DeleteTicketType)
+			organizer.GET("/stats", statisticsHandler.GetEventStats)
 		}
 	}
 
