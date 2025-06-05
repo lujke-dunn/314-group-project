@@ -3,6 +3,7 @@ package handlers
 import (
 	"lujke-dunn/314-group-project/backend/internal/database"
 	"lujke-dunn/314-group-project/backend/internal/models"
+	"lujke-dunn/314-group-project/backend/internal/services"
 	"net/http"
 	"strconv"
 
@@ -11,12 +12,14 @@ import (
 )
 
 type PaymentHandler struct {
-	db *gorm.DB
+	db           *gorm.DB
+	emailService *services.EmailService
 }
 
-func NewPaymentHandler() *PaymentHandler {
+func NewPaymentHandler(emailService *services.EmailService) *PaymentHandler {
 	return &PaymentHandler{
-		db: database.GetDB(),
+		db:           database.GetDB(),
+		emailService: emailService,
 	}
 }
 
@@ -77,7 +80,7 @@ func (h *PaymentHandler) ProcessPayment(c *gin.Context) {
 
 	updatedRegistration, _ := models.FindRegistrationByID(h.db, registration.ID)
 
-	models.CreateNotification(
+	notification, _ := models.CreateNotification(
 		h.db,
 		userID.(uint),
 		&registration.EventID,
@@ -86,10 +89,23 @@ func (h *PaymentHandler) ProcessPayment(c *gin.Context) {
 		models.NotificationTypePayment,
 	)
 
+	// Send email notification
+	user, _ := models.FindUserByID(h.db, userID.(uint))
+	event, _ := models.FindEventByID(h.db, registration.EventID)
+	ticketType, _ := models.FindTicketTypeByID(h.db, registration.TicketTypeID)
+	
+	if h.emailService != nil && user != nil && event != nil {
+		go func() {
+			h.emailService.SendPaymentConfirmation(user, event.Title, payment.Amount)
+			h.emailService.SendRegistrationConfirmation(user, event.Title, ticketType.Name)
+		}()
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"message":      "Payment processed successfully",
 		"payment":      payment,
 		"registration": updatedRegistration,
+		"notification": notification,
 	})
 }
 

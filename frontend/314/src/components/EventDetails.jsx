@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import api from '../api';
+import './EventDetails.css';
 
 function EventDetail() {
   const { id } = useParams(); // Get event ID from URL
@@ -20,6 +21,7 @@ function EventDetail() {
   const [rating, setRating] = useState(5);
   const [submittingComment, setSubmittingComment] = useState(false);
   const [feedbackError, setFeedbackError] = useState('');
+  const [publishing, setPublishing] = useState(false);
 
   useEffect(() => {
     const fetchEventDetails = async () => {
@@ -90,6 +92,29 @@ function EventDetail() {
     }
   };
   
+  // Handle publishing event
+  const handlePublishEvent = async () => {
+    if (!isAuthenticated) {
+      navigate('/login');
+      return;
+    }
+    
+    setPublishing(true);
+    try {
+      const response = await api.put(`/events/${id}/publish`);
+      console.log('Publish response:', response.data);
+      // Update the event state to reflect it's now published
+      setEvent(prev => ({ ...prev, is_published: true }));
+      setError('');
+      console.log('Event updated to published');
+    } catch (err) {
+      console.error('Failed to publish event:', err);
+      setError(err.response?.data?.error || 'Failed to publish event. Please try again.');
+    } finally {
+      setPublishing(false);
+    }
+  };
+
   // Handle submitting feedback
   const handleSubmitFeedback = async (e) => {
     e.preventDefault();
@@ -144,165 +169,321 @@ function EventDetail() {
     }
   };
 
-  if (loading) return <div>Loading event details...</div>;
-  if (error) return <div>{error}</div>;
-  if (!event) return <div>Event not found.</div>;
+  // Get user initials for avatar
+  const getUserInitials = (user) => {
+    if (!user) return '?';
+    const firstInitial = user.first_name?.[0] || '';
+    const lastInitial = user.last_name?.[0] || '';
+    return (firstInitial + lastInitial).toUpperCase() || user.email?.[0]?.toUpperCase() || '?';
+  };
+
+  // Render star rating
+  const renderStars = (rating) => {
+    return Array.from({ length: 5 }, (_, i) => (
+      <span key={i} className={`star ${i < rating ? '' : 'empty'}`}>
+        ★
+      </span>
+    ));
+  };
+
+  if (loading) {
+    return (
+      <div className="event-detail-wrapper">
+        <div className="loading-state">
+          <div className="loading-spinner"></div>
+          <p>Loading event details...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  if (error) {
+    return (
+      <div className="event-detail-wrapper">
+        <div className="error-message">
+          <span className="error-icon">&#9888;&#65039;</span>
+          {error}
+        </div>
+      </div>
+    );
+  }
+  
+  if (!event) {
+    return (
+      <div className="event-detail-wrapper">
+        <div className="error-message">
+          <span className="error-icon">&#10060;</span>
+          Event not found.
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div>
-      <button onClick={() => navigate(-1)}>Back</button>
-      
-      <h1>{event.title}</h1>
-      
-      {event.is_canceled && (
-        <div>
-          <h2>This event has been canceled</h2>
-        </div>
-      )}
-      
-      <div>
-        <p><strong>Date:</strong> {formatDate(event.start_datetime)}</p>
-        <p><strong>End Time:</strong> {formatDate(event.end_datetime)}</p>
-        <p><strong>Location:</strong> {event.venue}</p>
-        {event.address && (
-          <p><strong>Address:</strong> {event.address}, {event.city}, {event.state} {event.zip_code}</p>
-        )}
-        <p><strong>Virtual Event:</strong> {event.is_virtual ? 'Yes' : 'No'}</p>
+    <div className="event-detail-wrapper">
+      {/* Back Navigation */}
+      <div className="back-nav">
+        <button onClick={() => navigate(-1)} className="back-button">
+          <span className="back-icon">&#8592;</span>
+          Back to Events
+        </button>
       </div>
-      
-      <div>
-        <h2>Description</h2>
-        <p>{event.description}</p>
-      </div>
-      
-      {!event.is_canceled && (
-        <div>
-          <h2>Tickets</h2>
-          {ticketTypes.length === 0 ? (
-            <p>No tickets available for this event.</p>
-          ) : (
-            <div>
-              {ticketTypes.map(ticket => (
-                <div key={ticket.id}>
-                  <input
-                    type="radio"
-                    id={`ticket-${ticket.id}`}
-                    name="ticket"
-                    value={ticket.id}
-                    onChange={() => handleSelectTicket(ticket.id)}
-                    checked={selectedTicket === ticket.id}
-                  />
-                  <label htmlFor={`ticket-${ticket.id}`}>
-                    <h3>{ticket.name}</h3>
-                    <p>{ticket.description}</p>
-                    <p><strong>Price:</strong> ${ticket.price.toFixed(2)}</p>
-                    <p><strong>Available:</strong> {ticket.quantity_available}</p>
-                  </label>
-                </div>
-              ))}
-              
-              <button onClick={handleRegister} disabled={!selectedTicket}>
-                Register for Event
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-      
-      {/* Event Comments/Feedback Section */}
-      <div>
-        <h2>Comments & Feedback</h2>
-        
-        {/* Feedback Form */}
-        {isAuthenticated ? (
-          <div>
-            <h3>Leave a Comment</h3>
-            {feedbackError && <p style={{ color: 'red' }}>{feedbackError}</p>}
+      {/* Main Content */}
+      <div className="event-content">
+        <div className="main-content">
+          {/* Event Info Section */}
+          <section className="description-section">
+            {event.is_canceled && (
+              <div className="event-status-banner">
+                &#10060; This event has been canceled
+              </div>
+            )}
             
-            <form onSubmit={handleSubmitFeedback}>
-              <div>
-                <label htmlFor="rating">Rating:</label>
-                <select
-                  id="rating"
-                  value={rating}
-                  onChange={(e) => setRating(parseInt(e.target.value))}
-                >
-                  <option value={5}>5 - Excellent</option>
-                  <option value={4}>4 - Very Good</option>
-                  <option value={3}>3 - Good</option>
-                  <option value={2}>2 - Fair</option>
-                  <option value={1}>1 - Poor</option>
-                </select>
+            <h1 className="event-title">{event.title}</h1>
+            
+            <div className="event-info-grid">
+              <div className="info-row">
+                <span className="info-label">Date & Time</span>
+                <span className="info-value">{formatDate(event.start_datetime)} - {formatDate(event.end_datetime)}</span>
               </div>
-              
-              <div>
-                <label htmlFor="comment">Your Comment:</label>
-                <textarea
-                  id="comment"
-                  value={comment}
-                  onChange={(e) => setComment(e.target.value)}
-                  rows="4"
-                  required
-                ></textarea>
+              <div className="info-row">
+                <span className="info-label">Location</span>
+                <span className="info-value">{event.venue}{event.address ? `, ${event.city}, ${event.state}` : ''}</span>
               </div>
-              
-              <button type="submit" disabled={submittingComment}>
-                {submittingComment ? 'Submitting...' : 'Submit Comment'}
-              </button>
-            </form>
-          </div>
-        ) : (
-          <p>
-            <a onClick={() => navigate('/login')} style={{ cursor: 'pointer', textDecoration: 'underline' }}>
-              Log in
-            </a> to leave a comment.
-          </p>
-        )}
-        
-        {/* Display Feedback */}
-        <div>
-          <h3>What People Are Saying</h3>
-          
-          {feedbacks.length === 0 ? (
-            <p>No comments yet. Be the first to leave feedback!</p>
-          ) : (
-            <div>
-              {feedbacks.map(item => (
-                <div key={item.id}>
-                  <p>
-                    <strong>Rating:</strong> {item.rating}/5 | 
-                    <strong>From:</strong> {item.user.first_name} {item.user.last_name}
-                  </p>
-                  <p>{item.comment}</p>
-                  <p><small>Posted on: {formatDate(item.created_at)}</small></p>
-                  <hr />
-                </div>
-              ))}
             </div>
+            
+            <div className="event-description">
+              <h2 className="section-subtitle">About This Event</h2>
+              <p className="description-text">{event.description}</p>
+            </div>
+          </section>
+        </div>
+        
+        <div className="sidebar-content">
+          {/* Tickets Section */}
+          {!event.is_canceled && (
+            <section className="tickets-section">
+              <h2 className="section-title">
+                <span className="section-icon">&#127903;&#65039;</span>
+                Tickets
+              </h2>
+              
+              {error && (
+                <div className="error-message">
+                  <span className="error-icon">&#9888;&#65039;</span>
+                  {error}
+                </div>
+              )}
+              
+              {ticketTypes.length === 0 ? (
+                <div className="no-tickets">
+                  <div className="no-tickets-icon">&#127915;</div>
+                  <p>No tickets available for this event.</p>
+                </div>
+              ) : (
+                <>
+                  <div className="tickets-grid">
+                    {ticketTypes.map(ticket => (
+                      <label 
+                        key={ticket.id} 
+                        className={`ticket-option ${selectedTicket === ticket.id ? 'selected' : ''}`}
+                        htmlFor={`ticket-${ticket.id}`}
+                      >
+                        <input
+                          type="radio"
+                          id={`ticket-${ticket.id}`}
+                          name="ticket"
+                          value={ticket.id}
+                          onChange={() => handleSelectTicket(ticket.id)}
+                          checked={selectedTicket === ticket.id}
+                          className="ticket-radio"
+                        />
+                        <div className="ticket-content">
+                          <div className="ticket-info">
+                            <h4>{ticket.name}</h4>
+                            <p className="ticket-description">{ticket.description}</p>
+                            <p className="ticket-availability">
+                              {ticket.quantity_available} tickets available
+                            </p>
+                          </div>
+                          <div className="ticket-price">
+                            <span className="price-amount">${ticket.price.toFixed(2)}</span>
+                            <span className="price-label">per ticket</span>
+                          </div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                  
+                  <button 
+                    onClick={handleRegister} 
+                    disabled={!selectedTicket}
+                    className="register-button"
+                  >
+                    {selectedTicket ? 'Register for Event' : 'Select a Ticket Type'}
+                  </button>
+                </>
+              )}
+            </section>
           )}
         </div>
       </div>
-      
-      {/* Show event management options for event owner or admin */}
+      {/* Comments Section */}
+      <div className="event-content" style={{ marginTop: '4rem' }}>
+        <div style={{ gridColumn: '1 / -1' }}>
+          <section className="comments-section">
+            <h2 className="section-title">
+              <span className="section-icon">&#128172;</span>
+              Comments & Feedback
+            </h2>
+            
+            {/* Feedback Form */}
+            {isAuthenticated ? (
+              <div className="comment-form">
+                <h3>Leave a Comment</h3>
+                
+                {feedbackError && (
+                  <div className="error-message">
+                    <span className="error-icon">&#9888;&#65039;</span>
+                    {feedbackError}
+                  </div>
+                )}
+                
+                <form onSubmit={handleSubmitFeedback}>
+                  <div className="form-group">
+                    <label htmlFor="rating">How was your experience?</label>
+                    <select
+                      id="rating"
+                      value={rating}
+                      onChange={(e) => setRating(parseInt(e.target.value))}
+                      className="rating-select"
+                    >
+                      <option value={5}>&#11088;&#11088;&#11088;&#11088;&#11088; Excellent</option>
+                      <option value={4}>&#11088;&#11088;&#11088;&#11088; Very Good</option>
+                      <option value={3}>&#11088;&#11088;&#11088; Good</option>
+                      <option value={2}>&#11088;&#11088; Fair</option>
+                      <option value={1}>&#11088; Poor</option>
+                    </select>
+                  </div>
+                  
+                  <div className="form-group">
+                    <label htmlFor="comment">Share your thoughts</label>
+                    <textarea
+                      id="comment"
+                      value={comment}
+                      onChange={(e) => setComment(e.target.value)}
+                      className="comment-textarea"
+                      placeholder="Tell others about your experience at this event..."
+                      required
+                    ></textarea>
+                  </div>
+                  
+                  <button type="submit" disabled={submittingComment} className="submit-button">
+                    {submittingComment ? 'Submitting...' : 'Submit Comment'}
+                  </button>
+                </form>
+              </div>
+            ) : (
+              <div className="login-prompt">
+                <p>
+                  <span 
+                    onClick={() => navigate('/login')} 
+                    className="login-link"
+                  >
+                    Log in
+                  </span> to leave a comment and share your experience.
+                </p>
+              </div>
+            )}
+            
+            {/* Display Feedback */}
+            <div className="comments-list-wrapper">
+              <h3>What People Are Saying</h3>
+              
+              {feedbacks.length === 0 ? (
+                <div className="no-comments">
+                  <div className="no-comments-icon">&#128173;</div>
+                  <p>No comments yet. Be the first to leave feedback!</p>
+                </div>
+              ) : (
+                <div className="comments-list">
+                  {feedbacks.map(item => (
+                    <div key={item.id} className="comment-card">
+                      <div className="comment-header">
+                        <div className="comment-author">
+                          <div className="author-avatar">
+                            {getUserInitials(item.user)}
+                          </div>
+                          <div className="author-info">
+                            <h4>{item.user.first_name} {item.user.last_name}</h4>
+                            <span className="comment-date">{formatDate(item.created_at)}</span>
+                          </div>
+                        </div>
+                        <div className="comment-rating">
+                          <div className="rating-stars">
+                            {renderStars(item.rating)}
+                          </div>
+                        </div>
+                      </div>
+                      <p className="comment-text">{item.comment}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
+      </div>
+      {/* Event Management Section */}
       {isAuthenticated && event.user_id === user?.id && (
-        <div>
-          <h2>Event Management</h2>
-          <button onClick={() => navigate(`/events/${id}/edit`)}>
-            Edit Event
-          </button>
-          {!event.is_published && (
-            <button onClick={() => navigate(`/events/${id}/publish`)}>
-              Publish Event
-            </button>
-          )}
-          {!event.is_canceled && (
-            <button onClick={() => navigate(`/events/${id}/cancel`)}>
-              Cancel Event
-            </button>
-          )}
-          <button onClick={() => navigate(`/events/${id}/ticket-types/create`)}>
-            Add Ticket Type
-          </button>
+        <div className="event-content">
+          <div style={{ gridColumn: '1 / -1' }}>
+            <section className="management-section">
+              <h2 className="section-title">
+                <span className="section-icon">&#9881;&#65039;</span>
+                Event Management
+              </h2>
+              
+              <div className="management-actions">
+                <button 
+                  onClick={() => navigate(`/events/${id}/edit`)}
+                  className="management-button secondary"
+                >
+                  <span>&#9999;&#65039;</span>
+                  Edit Event
+                </button>
+                
+                {!event.is_published && (
+                  <button 
+                    onClick={handlePublishEvent}
+                    disabled={publishing}
+                    className="management-button primary"
+                  >
+                    <span>{publishing ? '&#8987;' : '&#128640;'}</span>
+                    {publishing ? 'Publishing...' : 'Publish Event'}
+                  </button>
+                )}
+                
+                {!event.is_canceled && (
+                  <button 
+                    onClick={() => navigate(`/events/${id}/cancel`)}
+                    className="management-button danger"
+                  >
+                    <span>&#10060;</span>
+                    Cancel Event
+                  </button>
+                )}
+                
+                <button 
+                  onClick={() => navigate(`/events/${id}/ticket-types/create`)}
+                  className="management-button secondary"
+                >
+                  <span>&#127915;</span>
+                  Add Ticket Type
+                </button>
+              </div>
+            </section>
+          </div>
         </div>
       )}
     </div>

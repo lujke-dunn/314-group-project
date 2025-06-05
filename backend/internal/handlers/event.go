@@ -1,8 +1,11 @@
 package handlers
 
 import (
+	"fmt"
+	"log"
 	"lujke-dunn/314-group-project/backend/internal/database"
 	"lujke-dunn/314-group-project/backend/internal/models"
+	"lujke-dunn/314-group-project/backend/internal/services"
 	"net/http"
 	"strconv"
 	"time"
@@ -12,12 +15,14 @@ import (
 )
 
 type EventHandler struct {
-	db *gorm.DB
+	db           *gorm.DB
+	emailService *services.EmailService
 }
 
-func NewEventHandler() *EventHandler {
+func NewEventHandler(emailService *services.EmailService) *EventHandler {
 	return &EventHandler{
-		db: database.GetDB(),
+		db:           database.GetDB(),
+		emailService: emailService,
 	}
 }
 
@@ -73,7 +78,7 @@ func (h *EventHandler) CreateEvent(c *gin.Context) {
 		ZipCode:       input.ZipCode,
 		Country:       input.Country,
 		IsVirtual:     input.IsVirtual,
-		IsPublished:   false,
+		IsPublished:   true,  // Automatically publish events when created
 		IsCanceled:    false,
 	}
 
@@ -82,6 +87,30 @@ func (h *EventHandler) CreateEvent(c *gin.Context) {
 		return
 	}
 
+	// Reload the event to ensure all fields are populated
+	h.db.First(&event, event.ID)
+	
+	// Send email notification to the organizer
+	user, _ := models.FindUserByID(h.db, userID.(uint))
+	if h.emailService != nil && user != nil {
+		go func() {
+			if err := h.emailService.SendEventCreatedConfirmation(user, &event); err != nil {
+				// Log error but don't fail the request
+				log.Printf("Failed to send event creation email: %v", err)
+			}
+		}()
+	}
+	
+	// Create notification in database
+	models.CreateNotification(
+		h.db,
+		userID.(uint),
+		&event.ID,
+		"Event Created Successfully",
+		fmt.Sprintf("Your event '%s' has been created and published successfully!", event.Title),
+		models.NotificationTypeEventUpdate,
+	)
+	
 	c.JSON(http.StatusCreated, event)
 }
 
@@ -111,7 +140,7 @@ func (h *EventHandler) GetEvent(c *gin.Context) {
 
 	h.db.Preload("User", func(db *gorm.DB) *gorm.DB {
 		return db.Select("id, first_name, last_name, email")
-	}).Preload("TickeTypes").First(&event, id)
+	}).Preload("TicketTypes").First(&event, id)
 
 	c.JSON(http.StatusOK, event)
 }
@@ -319,6 +348,9 @@ func (h *EventHandler) PublishEvent(c *gin.Context) {
 		return
 	}
 
+	// Reload the event to ensure we return the updated state
+	h.db.First(&event, id)
+
 	c.JSON(http.StatusOK, gin.H{"message": "Event published successfully", "event": event})
 }
 
@@ -423,4 +455,43 @@ func (h *EventHandler) DeleteEvent(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Event deleted successfully"})
+}
+
+// GetUserEvents retrieves all events created by a specific user
+func (h *EventHandler) GetUserEvents(c *gin.Context) {
+	// Get user ID from context
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	var events []models.Event
+	query := h.db.Where("user_id = ?", userID)
+
+	// Apply ordering
+	query = query.Order("created_at DESC")
+
+	// Pagination
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	perPage, _ := strconv.Atoi(c.DefaultQuery("per_page", "10"))
+	offset := (page - 1) * perPage
+
+	var total int64
+	query.Model(&models.Event{}).Count(&total)
+
+	// Fetch events with preloaded ticket types
+	result := query.Preload("TicketTypes").Limit(perPage).Offset(offset).Find(&events)
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch events"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"events": events,
+		"total":  total,
+		"page":   page,
+		"per_page": perPage,
+		"total_pages": (total + int64(perPage) - 1) / int64(perPage),
+	})
 }

@@ -23,7 +23,7 @@ func NewFeedbackHandler() *FeedbackHandler {
 func (h *FeedbackHandler) CreateFeedback(c *gin.Context) {
 	userID, exists := c.Get("userID")
 	if !exists {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid event ID"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
 
@@ -48,7 +48,7 @@ func (h *FeedbackHandler) CreateFeedback(c *gin.Context) {
 	}
 
 	if count == 0 {
-		c.JSON(http.StatusForbidden, gin.H{"error": "You must have attended the event to provide feedback"})
+		c.JSON(http.StatusForbidden, gin.H{"error": "You must have registered for this event to leave feedback."})
 		return
 	}
 

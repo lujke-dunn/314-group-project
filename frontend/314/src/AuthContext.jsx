@@ -87,11 +87,21 @@ export function AuthProvider({ children }) {
 
   const updateProfile = async (userData) => {
     try {
-      const response = await api.put('/profile', userData);
+      const response = await axios.put('/profile', userData);
       setUser(prev => ({ ...prev, ...response.data }));
       return response.data;
     } catch (error) {
       throw error.response?.data?.error || 'Failed to update profile';
+    }
+  };
+
+  const refreshUser = async () => {
+    try {
+      const response = await axios.get('/profile');
+      setUser(response.data);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to refresh user data';
     }
   };
   
@@ -104,6 +114,7 @@ export function AuthProvider({ children }) {
     register,
     logout,
     updateProfile,
+    refreshUser,
     isAuthenticated: !!user
   };
 

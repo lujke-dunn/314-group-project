@@ -11,14 +11,22 @@ import (
 	"github.com/gin-gonic/gin"
 
 	//"github.com/golang-jwt/jwt/v5"
+	"lujke-dunn/314-group-project/backend/internal/config"
 	"lujke-dunn/314-group-project/backend/internal/database"
 	//"lujke-dunn/314-group-project/backend/internal/models"
 	"lujke-dunn/314-group-project/backend/internal/handlers"
 	"lujke-dunn/314-group-project/backend/internal/middleware"
+	"lujke-dunn/314-group-project/backend/internal/services"
 	//"gorm.io/gorm"
 )
 
 func main() {
+	// Load configuration
+	cfg := config.LoadConfig()
+
+	// Initialize email service
+	emailService := services.NewEmailService(&cfg.SMTP)
+
 	// Set up Gin
 	r := gin.Default()
 
@@ -44,10 +52,10 @@ func main() {
 
 	// Create handlers
 	userHandler := handlers.NewUserHandler()
-	eventHandler := handlers.NewEventHandler()
+	eventHandler := handlers.NewEventHandler(emailService)
 	ticketTypeHandler := handlers.NewTicketTypeHandler()
 	registrationHandler := handlers.NewRegistrationHandler()
-	paymentHandler := handlers.NewPaymentHandler()
+	paymentHandler := handlers.NewPaymentHandler(emailService)
 	feedbackHandler := handlers.NewFeedbackHandler()
 	statisticsHandler := handlers.NewStatisticsHandler()
 
@@ -65,7 +73,6 @@ func main() {
 	r.POST("/login", userHandler.LoginUser)
 	r.GET("/events/:id/ticket-types", ticketTypeHandler.GetTicketTypes)
 	r.GET("/events", eventHandler.ListEvents)
-	r.GET("/events/:id", eventHandler.GetEvent)
 	// Protected routes
 	authorized := r.Group("/")
 	authorized.Use(middleware.AuthMiddleware())
@@ -74,6 +81,7 @@ func main() {
 		authorized.GET("/profile", userHandler.GetProfile)
 		authorized.PUT("/profile", userHandler.UpdateProfile)
 		authorized.POST("/change-password", userHandler.ChangePassword)
+		authorized.POST("/become-organizer", userHandler.BecomeOrganizer)
 		authorized.POST("/registrations", registrationHandler.CreateRegistration)
 		authorized.GET("/registrations", registrationHandler.GetUserRegistrations)
 		authorized.GET("/registrations/:id", registrationHandler.GetRegistrationDetails)
@@ -97,21 +105,22 @@ func main() {
 			admin.GET("/stats", statisticsHandler.GetSystemStats)
 		}
 
+		authorized.GET("/events/:id", eventHandler.GetEvent)
+		authorized.GET("/my-events", eventHandler.GetUserEvents)
 		authorized.POST("/events/create", eventHandler.CreateEvent)
 		authorized.PUT("/events/:id/publish", eventHandler.PublishEvent)
 
 		// Organizer routes - specifically for event management
-		organizer := authorized.Group("/events")
+		organizer := authorized.Group("/")
 		organizer.Use(middleware.OrganizerRequired())
 		{
-
-			organizer.PUT("/:id", eventHandler.UpdateEvent)
-			organizer.DELETE("/:id", eventHandler.DeleteEvent)
-			organizer.PUT("/:id/cancel", eventHandler.CancelEvent)
-			organizer.POST("/:id/ticket-types", ticketTypeHandler.CreateTicketType)
-			organizer.PUT("/:id/ticket-types/:ticket_id", ticketTypeHandler.UpdateTicketType)
-			organizer.DELETE("/:id/ticket-types/:ticket_id", ticketTypeHandler.DeleteTicketType)
-			organizer.GET("/stats", statisticsHandler.GetEventStats)
+			organizer.PUT("/events/:id", eventHandler.UpdateEvent)
+			organizer.DELETE("/events/:id", eventHandler.DeleteEvent)
+			organizer.PUT("/events/:id/cancel", eventHandler.CancelEvent)
+			organizer.POST("/events/:id/ticket-types", ticketTypeHandler.CreateTicketType)
+			organizer.PUT("/events/:id/ticket-types/:ticket_id", ticketTypeHandler.UpdateTicketType)
+			organizer.DELETE("/events/:id/ticket-types/:ticket_id", ticketTypeHandler.DeleteTicketType)
+			organizer.GET("/events/stats", statisticsHandler.GetEventStats)
 		}
 	}
 

@@ -44,12 +44,13 @@ func (h *UserHandler) RegisterUser(c *gin.Context) {
 		return
 	}
 
-	// Create new user
+	// Create new user (automatically make them an organizer)
 	user := models.User{
-		Email:     input.Email,
-		FirstName: input.FirstName,
-		LastName:  input.LastName,
-		Phone:     input.Phone,
+		Email:       input.Email,
+		FirstName:   input.FirstName,
+		LastName:    input.LastName,
+		Phone:       input.Phone,
+		IsOrganizer: true,  // Automatically grant organizer privileges
 	}
 
 	// Set password (this will be hashed)
@@ -66,12 +67,13 @@ func (h *UserHandler) RegisterUser(c *gin.Context) {
 
 	// Return user without password
 	c.JSON(http.StatusCreated, gin.H{
-		"id":         user.ID,
-		"email":      user.Email,
-		"first_name": user.FirstName,
-		"last_name":  user.LastName,
-		"phone":      user.Phone,
-		"created_at": user.CreatedAt,
+		"id":           user.ID,
+		"email":        user.Email,
+		"first_name":   user.FirstName,
+		"last_name":    user.LastName,
+		"phone":        user.Phone,
+		"is_organizer": user.IsOrganizer,
+		"created_at":   user.CreatedAt,
 	})
 }
 
@@ -118,11 +120,12 @@ func (h *UserHandler) LoginUser(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"token": tokenString,
 		"user": gin.H{
-			"id":         user.ID,
-			"email":      user.Email,
-			"first_name": user.FirstName,
-			"last_name":  user.LastName,
-			"is_admin":   user.IsAdmin,
+			"id":           user.ID,
+			"email":        user.Email,
+			"first_name":   user.FirstName,
+			"last_name":    user.LastName,
+			"is_admin":     user.IsAdmin,
+			"is_organizer": user.IsOrganizer,
 		},
 	})
 }
@@ -257,6 +260,63 @@ func (h *UserHandler) ChangePassword(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Password updated successfully"})
+}
+
+// BecomeOrganizer allows a user to become an event organizer
+func (h *UserHandler) BecomeOrganizer(c *gin.Context) {
+	// Get user ID from context (middleware)
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	// Find user by ID
+	user, err := models.FindUserByID(h.db, userID.(uint))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	// Check if already an organizer
+	if user.IsOrganizer {
+		c.JSON(http.StatusOK, gin.H{"message": "You are already an organizer"})
+		return
+	}
+
+	// Update user to be an organizer
+	user.IsOrganizer = true
+	if err := h.db.Save(user).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user status"})
+		return
+	}
+
+	// Create new JWT token with updated organizer status
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"user_id":      user.ID,
+		"email":        user.Email,
+		"is_admin":     user.IsAdmin,
+		"is_organizer": user.IsOrganizer,
+	})
+
+	// Sign the token with a secret key
+	tokenString, err := token.SignedString([]byte("dogpark"))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Successfully became an organizer",
+		"token":   tokenString,
+		"user": gin.H{
+			"id":           user.ID,
+			"email":        user.Email,
+			"first_name":   user.FirstName,
+			"last_name":    user.LastName,
+			"is_organizer": user.IsOrganizer,
+		},
+	})
 }
 
 // GetUserByID gets a user by ID (admin only)

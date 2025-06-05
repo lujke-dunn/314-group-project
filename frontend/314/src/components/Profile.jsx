@@ -3,9 +3,10 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import api from '../api';
+import './Profile.css';
 
 function Profile() {
-  const { user, isAuthenticated, updateProfile } = useAuth();
+  const { user, isAuthenticated, updateProfile, logout } = useAuth();
   const navigate = useNavigate();
   
   // State for different data sections
@@ -14,7 +15,7 @@ function Profile() {
   const [feedbacks, setFeedbacks] = useState([]);
   
   // UI state
-  const [activeTab, setActiveTab] = useState('profile');
+  const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState({
     registrations: true,
     organized: true,
@@ -68,10 +69,11 @@ function Profile() {
       try {
         // Fetch registrations
         const regResponse = await api.get('/registrations');
-        setRegistrations(regResponse.data);
+        setRegistrations(regResponse.data || []);
         setLoading(prev => ({ ...prev, registrations: false }));
       } catch (err) {
         console.error('Failed to fetch registrations:', err);
+        setRegistrations([]); // Set empty array on error
         setError(prev => ({ 
           ...prev, 
           registrations: 'Failed to load your event registrations' 
@@ -80,15 +82,14 @@ function Profile() {
       }
       
       // Fetch organized events (if user is an organizer)
-      if (user.is_organizer) {
+      if (user?.is_organizer) {
         try {
-          const eventsResponse = await api.get('/events', { 
-            params: { user_id: user.id } 
-          });
+          const eventsResponse = await api.get('/my-events');
           setOrganizedEvents(eventsResponse.data.events || []);
           setLoading(prev => ({ ...prev, organized: false }));
         } catch (err) {
           console.error('Failed to fetch organized events:', err);
+          setOrganizedEvents([]); // Set empty array on error
           setError(prev => ({ 
             ...prev, 
             organized: 'Failed to load your organized events' 
@@ -102,10 +103,11 @@ function Profile() {
       // Fetch user's feedback history
       try {
         const feedbackResponse = await api.get('/feedback');
-        setFeedbacks(feedbackResponse.data);
+        setFeedbacks(feedbackResponse.data || []);
         setLoading(prev => ({ ...prev, feedback: false }));
       } catch (err) {
         console.error('Failed to fetch feedback:', err);
+        setFeedbacks([]); // Set empty array on error
         setError(prev => ({ 
           ...prev, 
           feedback: 'Failed to load your feedback history' 
@@ -208,186 +210,290 @@ function Profile() {
     return new Date(dateString).toLocaleDateString(undefined, options);
   };
 
+  // Get user initials for avatar
+  const getUserInitials = () => {
+    if (!user) return 'U';
+    const firstInitial = user.first_name?.[0] || '';
+    const lastInitial = user.last_name?.[0] || '';
+    return (firstInitial + lastInitial).toUpperCase() || user.email?.[0]?.toUpperCase() || 'U';
+  };
+
+  // Calculate stats - handle null/undefined arrays
+  const safeRegistrations = registrations || [];
+  const safeOrganizedEvents = organizedEvents || [];
+  const safeFeedbacks = feedbacks || [];
+  
+  const totalEvents = safeRegistrations.length;
+  const upcomingEvents = safeRegistrations.filter(reg => 
+    new Date(reg.event_start_date) > new Date() && reg.status !== 'canceled'
+  ).length;
+  const organizedCount = safeOrganizedEvents.length;
+  const avgRating = safeFeedbacks.length > 0 
+    ? (safeFeedbacks.reduce((sum, f) => sum + f.rating, 0) / safeFeedbacks.length).toFixed(1)
+    : 0;
+
+  // Show loading while checking authentication
   if (!isAuthenticated) {
-    return null; // Will redirect in the useEffect
+    return (
+      <div className="profile-wrapper">
+        <div className="loading-state">
+          <div className="loading-spinner"></div>
+          <p>Loading profile...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading if user data isn't loaded yet
+  if (!user) {
+    return (
+      <div className="profile-wrapper">
+        <div className="loading-state">
+          <div className="loading-spinner"></div>
+          <p>Loading user data...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div>
-      <h2>My Profile</h2>
-      
-      {/* Profile Navigation Tabs */}
-      <div>
-        <button onClick={() => setActiveTab('profile')}>
-          Personal Info
-        </button>
-        <button onClick={() => setActiveTab('events')}>
-          My Events
-        </button>
-        {user.is_organizer && (
-          <button onClick={() => setActiveTab('organized')}>
-            Organized Events
-          </button>
-        )}
-        <button onClick={() => setActiveTab('payments')}>
-          Payments
-        </button>
-        <button onClick={() => setActiveTab('feedback')}>
-          Feedback
-        </button>
-        <button onClick={() => setActiveTab('notifications')}>
-          Notifications
-        </button>
-      </div>
-      
-      {/* Personal Information */}
-      {activeTab === 'profile' && (
-        <div>
-          <h3>Account Information</h3>
-          {error.profile && <div>{error.profile}</div>}
-          
-          {!editing ? (
-            <div>
-              <p><strong>Email:</strong> {user.email}</p>
-              <p><strong>Name:</strong> {user.first_name} {user.last_name}</p>
-              <p><strong>Phone:</strong> {user.phone || 'Not provided'}</p>
-              <p><strong>Account Type:</strong> {user.is_admin ? 'Admin' : user.is_organizer ? 'Organizer' : 'Regular User'}</p>
-              
-              <div>
-                <button onClick={() => setEditing(true)}>Edit Profile</button>
-                <button onClick={() => setChangingPassword(true)}>Change Password</button>
-              </div>
-            </div>
-          ) : (
-            <form onSubmit={handleProfileSubmit}>
-              <div>
-                <label htmlFor="first_name">First Name</label>
-                <input
-                  type="text"
-                  id="first_name"
-                  name="first_name"
-                  value={formData.first_name}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-              
-              <div>
-                <label htmlFor="last_name">Last Name</label>
-                <input
-                  type="text"
-                  id="last_name"
-                  name="last_name"
-                  value={formData.last_name}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-              
-              <div>
-                <label htmlFor="phone">Phone Number</label>
-                <input
-                  type="tel"
-                  id="phone"
-                  name="phone"
-                  value={formData.phone}
-                  onChange={handleChange}
-                />
-              </div>
-              
-              <div>
-                <button type="submit">Save Changes</button>
-                <button type="button" onClick={() => setEditing(false)}>Cancel</button>
-              </div>
-            </form>
-          )}
-          
-          {/* Password Change Form */}
-          {changingPassword && (
-            <div>
-              <h3>Change Password</h3>
-              {error.password && <div>{error.password}</div>}
-              
-              <form onSubmit={handlePasswordSubmit}>
-                <div>
-                  <label htmlFor="current_password">Current Password</label>
-                  <input
-                    type="password"
-                    id="current_password"
-                    name="current_password"
-                    value={passwordData.current_password}
-                    onChange={handlePasswordChange}
-                    required
-                  />
-                </div>
-                
-                <div>
-                  <label htmlFor="new_password">New Password</label>
-                  <input
-                    type="password"
-                    id="new_password"
-                    name="new_password"
-                    value={passwordData.new_password}
-                    onChange={handlePasswordChange}
-                    required
-                    minLength="6"
-                  />
-                </div>
-                
-                <div>
-                  <label htmlFor="confirm_password">Confirm New Password</label>
-                  <input
-                    type="password"
-                    id="confirm_password"
-                    name="confirm_password"
-                    value={passwordData.confirm_password}
-                    onChange={handlePasswordChange}
-                    required
-                    minLength="6"
-                  />
-                </div>
-                
-                <div>
-                  <button type="submit">Update Password</button>
-                  <button type="button" onClick={() => setChangingPassword(false)}>Cancel</button>
-                </div>
-              </form>
-            </div>
-          )}
+    <div className="profile-wrapper">
+      {/* Hero Section */}
+      <section className="profile-hero">
+        <div className="hero-background">
+          <div className="floating-element element-1"></div>
+          <div className="floating-element element-2"></div>
         </div>
-      )}
-      
-      {/* Event Registrations */}
-      {activeTab === 'events' && (
-        <div>
-          <h3>My Events</h3>
+        
+        <div className="hero-content">
+          <div className="user-avatar">
+            <div className="avatar-circle">
+              {getUserInitials()}
+            </div>
+            <div className="avatar-status"></div>
+          </div>
           
-          {/* Event List */}
-          <div>
-            <h4>My Registrations</h4>
+          <div className="user-info">
+            <h1 className="user-name">
+              {user?.first_name || 'First'} {user?.last_name || 'User'}
+            </h1>
+            <p className="user-email">{user?.email || 'user@example.com'}</p>
+            <div className="user-badges">
+              {user?.is_admin && <span className="badge admin">Admin</span>}
+              {user?.is_organizer && <span className="badge organizer">Event Organizer</span>}
+            </div>
+          </div>
+          
+          <div className="hero-actions">
+            <button onClick={logout} className="logout-btn">
+              <span>&#128682;</span>
+              Sign Out
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* Stats Dashboard */}
+      <section className="stats-dashboard">
+        <div className="stats-grid">
+          <div className="stat-card">
+            <div className="stat-icon">&#127915;</div>
+            <div className="stat-content">
+              <div className="stat-number">{totalEvents}</div>
+              <div className="stat-label">Events Attended</div>
+            </div>
+          </div>
+          
+          <div className="stat-card">
+            <div className="stat-icon">&#128198;</div>
+            <div className="stat-content">
+              <div className="stat-number">{upcomingEvents}</div>
+              <div className="stat-label">Upcoming Events</div>
+            </div>
+          </div>
+          
+          {user?.is_organizer && (
+            <div className="stat-card">
+              <div className="stat-icon">&#127914;</div>
+              <div className="stat-content">
+                <div className="stat-number">{organizedCount}</div>
+                <div className="stat-label">Events Created</div>
+              </div>
+            </div>
+          )}
+          
+          <div className="stat-card">
+            <div className="stat-icon">&#11088;</div>
+            <div className="stat-content">
+              <div className="stat-number">{avgRating || '--'}</div>
+              <div className="stat-label">Avg. Rating Given</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Navigation Tabs */}
+      <nav className="profile-nav">
+        <div className="nav-container">
+          <button 
+            onClick={() => setActiveTab('overview')}
+            className={`nav-tab ${activeTab === 'overview' ? 'active' : ''}`}
+          >
+            <span className="tab-icon">&#128202;</span>
+            Overview
+          </button>
+          
+          <button 
+            onClick={() => setActiveTab('events')}
+            className={`nav-tab ${activeTab === 'events' ? 'active' : ''}`}
+          >
+            <span className="tab-icon">&#127903;&#65039;</span>
+            My Events
+          </button>
+          
+          {user?.is_organizer && (
+            <button 
+              onClick={() => setActiveTab('organized')}
+              className={`nav-tab ${activeTab === 'organized' ? 'active' : ''}`}
+            >
+              <span className="tab-icon">&#127914;</span>
+              Organized Events
+            </button>
+          )}
+          
+          <button 
+            onClick={() => setActiveTab('settings')}
+            className={`nav-tab ${activeTab === 'settings' ? 'active' : ''}`}
+          >
+            <span className="tab-icon">&#9881;&#65039;</span>
+            Settings
+          </button>
+        </div>
+      </nav>
+
+      {/* Main Content */}
+      <main className="profile-content">
+        {/* Overview Tab */}
+        {activeTab === 'overview' && (
+          <div className="overview-section">
+            <div className="content-grid">
+              {/* Recent Activity */}
+              <div className="activity-card">
+                <h3>Recent Activity</h3>
+                <div className="activity-list">
+                  {safeRegistrations.slice(0, 3).map((reg) => (
+                    <div key={reg.id} className="activity-item">
+                      <div className="activity-icon">&#127915;</div>
+                      <div className="activity-content">
+                        <p>Registered for <strong>{reg.event_title}</strong></p>
+                        <span className="activity-date">{formatDate(reg.created_at)}</span>
+                      </div>
+                    </div>
+                  ))}
+                  {safeRegistrations.length === 0 && (
+                    <div className="empty-state">
+                      <p>No recent activity</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Quick Actions */}
+              <div className="quick-actions-card">
+                <h3>Quick Actions</h3>
+                <div className="actions-grid">
+                  <button onClick={() => navigate('/')} className="action-btn">
+                    <span>&#128269;</span>
+                    Browse Events
+                  </button>
+                  {user?.is_organizer && (
+                    <button onClick={() => navigate('/events/create')} className="action-btn">
+                      <span>&#10133;</span>
+                      Create Event
+                    </button>
+                  )}
+                  <button onClick={() => setActiveTab('settings')} className="action-btn">
+                    <span>&#9881;&#65039;</span>
+                    Settings
+                  </button>
+                  <button onClick={() => setChangingPassword(true)} className="action-btn">
+                    <span>&#128272;</span>
+                    Change Password
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Events Tab */}
+        {activeTab === 'events' && (
+          <div className="events-section">
+            <div className="section-header">
+              <h2>My Events</h2>
+              <button onClick={() => navigate('/')} className="browse-btn">
+                Browse More Events
+              </button>
+            </div>
             
             {loading.registrations ? (
-              <p>Loading your events...</p>
+              <div className="loading-state">
+                <div className="loading-spinner"></div>
+                <p>Loading your events...</p>
+              </div>
             ) : error.registrations ? (
-              <div>{error.registrations}</div>
-            ) : registrations.length === 0 ? (
-              <p>You haven't registered for any events yet.</p>
+              <div className="error-state">
+                <span className="error-icon">&#9888;&#65039;</span>
+                {error.registrations}
+              </div>
+            ) : safeRegistrations.length === 0 ? (
+              <div className="empty-state">
+                <div className="empty-icon">&#127915;</div>
+                <h3>No events yet</h3>
+                <p>You haven't registered for any events. Start exploring!</p>
+                <button onClick={() => navigate('/')} className="cta-btn">
+                  Browse Events
+                </button>
+              </div>
             ) : (
-              <div>
-                {registrations.map((reg) => (
-                  <div key={reg.id}>
-                    <h5>{reg.event_title}</h5>
-                    <p><strong>Date:</strong> {formatDate(reg.event_start_date)}</p>
-                    <p><strong>Ticket:</strong> {reg.ticket_name}</p>
-                    <p><strong>Status:</strong> {reg.status}</p>
+              <div className="events-grid">
+                {safeRegistrations.map((reg) => (
+                  <div key={reg.id} className="event-card">
+                    <div className="event-status">
+                      <span className={`status-badge ${reg.status}`}>
+                        {reg.status}
+                      </span>
+                    </div>
                     
-                    <div>
-                      <button onClick={() => navigate(`/events/${reg.event_id}`)}>
+                    <div className="event-header">
+                      <h4>{reg.event_title}</h4>
+                      <p className="event-date">{formatDate(reg.event_start_date)}</p>
+                    </div>
+                    
+                    <div className="event-details">
+                      <div className="detail-item">
+                        <span className="detail-icon">&#127903;&#65039;</span>
+                        <span>{reg.ticket_name}</span>
+                      </div>
+                      <div className="detail-item">
+                        <span className="detail-icon">&#128176;</span>
+                        <span>${reg.total_price?.toFixed(2) || '0.00'}</span>
+                      </div>
+                    </div>
+                    
+                    <div className="event-actions">
+                      <button 
+                        onClick={() => navigate(`/events/${reg.event_id}`)}
+                        className="action-btn primary"
+                      >
                         View Event
                       </button>
                       {reg.status !== 'canceled' && (
-                        <button onClick={() => navigate(`/registrations/${reg.id}`)}>
-                          View Registration
+                        <button 
+                          onClick={() => navigate(`/registrations/${reg.id}`)}
+                          className="action-btn secondary"
+                        >
+                          View Ticket
                         </button>
                       )}
                     </div>
@@ -396,216 +502,316 @@ function Profile() {
               </div>
             )}
           </div>
-        </div>
-      )}
-      
-      {/* Organized Events (for organizers) */}
-      {activeTab === 'organized' && user.is_organizer && (
-        <div>
-          <h3>Events You've Organized</h3>
-          
-          {loading.organized ? (
-            <p>Loading your organized events...</p>
-          ) : error.organized ? (
-            <div>{error.organized}</div>
-          ) : organizedEvents.length === 0 ? (
-            <div>
-              <p>You haven't organized any events yet.</p>
-              <button onClick={() => navigate('/events/create')}>Create Event</button>
+        )}
+
+        {/* Organized Events Tab */}
+        {activeTab === 'organized' && user?.is_organizer && (
+          <div className="organized-section">
+            <div className="section-header">
+              <h2>Events You've Organized</h2>
+              <button onClick={() => navigate('/events/create')} className="create-btn">
+                <span>&#10133;</span>
+                Create New Event
+              </button>
             </div>
-          ) : (
-            <>
-              <div>
-                <div>
-                  <h4>Total Events</h4>
-                  <p>{organizedEvents.length}</p>
-                </div>
-                <div>
-                  <h4>Published</h4>
-                  <p>{organizedEvents.filter(e => e.is_published).length}</p>
-                </div>
-                <div>
-                  <h4>Upcoming</h4>
-                  <p>
-                    {organizedEvents.filter(e => 
-                      new Date(e.start_datetime) > new Date() && !e.is_canceled
-                    ).length}
-                  </p>
-                </div>
+            
+            {loading.organized ? (
+              <div className="loading-state">
+                <div className="loading-spinner"></div>
+                <p>Loading your organized events...</p>
               </div>
-              
-              <div>
-                {organizedEvents.map((event) => (
-                  <div key={event.id}>
-                    <div>
-                      {event.is_published ? (
-                        event.is_canceled ? 
-                          <span>Canceled</span> : 
-                          <span>Published</span>
-                      ) : (
-                        <span>Draft</span>
-                      )}
+            ) : error.organized ? (
+              <div className="error-state">
+                <span className="error-icon">&#9888;&#65039;</span>
+                {error.organized}
+              </div>
+            ) : safeOrganizedEvents.length === 0 ? (
+              <div className="empty-state">
+                <div className="empty-icon">&#127914;</div>
+                <h3>No events created yet</h3>
+                <p>Start organizing amazing events for your community!</p>
+                <button onClick={() => navigate('/events/create')} className="cta-btn">
+                  Create Your First Event
+                </button>
+              </div>
+            ) : (
+              <div className="events-grid">
+                {safeOrganizedEvents.map((event) => (
+                  <div key={event.id} className="event-card organized">
+                    <div className="event-status">
+                      <span className={`status-badge ${event.is_published ? (event.is_canceled ? 'canceled' : 'published') : 'draft'}`}>
+                        {event.is_published ? (event.is_canceled ? 'Canceled' : 'Published') : 'Draft'}
+                      </span>
                     </div>
                     
-                    <h5>{event.title}</h5>
-                    <p><strong>Date:</strong> {formatDate(event.start_datetime)}</p>
-                    <p><strong>Venue:</strong> {event.venue}</p>
+                    <div className="event-header">
+                      <h4>{event.title}</h4>
+                      <p className="event-date">{formatDate(event.start_datetime)}</p>
+                    </div>
                     
-                    <div>
-                      <button onClick={() => navigate(`/events/${event.id}`)}>
+                    <div className="event-details">
+                      <div className="detail-item">
+                        <span className="detail-icon">📍</span>
+                        <span>{event.venue}</span>
+                      </div>
+                      <div className="detail-item">
+                        <span className="detail-icon">👥</span>
+                        <span>0 registered</span>
+                      </div>
+                    </div>
+                    
+                    <div className="event-actions">
+                      <button 
+                        onClick={() => navigate(`/events/${event.id}`)}
+                        className="action-btn primary"
+                      >
                         View
                       </button>
-                      <button onClick={() => navigate(`/events/${event.id}/edit`)}>
+                      <button 
+                        onClick={() => navigate(`/events/${event.id}/edit`)}
+                        className="action-btn secondary"
+                      >
                         Edit
                       </button>
-                      {!event.is_published && (
-                        <button onClick={() => navigate(`/events/${event.id}/publish`)}>
-                          Publish
-                        </button>
-                      )}
                     </div>
                   </div>
                 ))}
               </div>
-              
-              <div>
-                <button onClick={() => navigate('/events/create')}>Create New Event</button>
+            )}
+          </div>
+        )}
+
+        {/* Settings Tab */}
+        {activeTab === 'settings' && (
+          <div className="settings-section">
+            <div className="settings-grid">
+              {/* Personal Information */}
+              <div className="settings-card">
+                <h3>Personal Information</h3>
+                {error.profile && (
+                  <div className="error-message">
+                    <span className="error-icon">&#9888;&#65039;</span>
+                    {error.profile}
+                  </div>
+                )}
+                
+                {!editing ? (
+                  <div className="info-display">
+                    <div className="info-item">
+                      <label>Email</label>
+                      <span>{user?.email}</span>
+                    </div>
+                    <div className="info-item">
+                      <label>Name</label>
+                      <span>{user?.first_name} {user?.last_name}</span>
+                    </div>
+                    <div className="info-item">
+                      <label>Phone</label>
+                      <span>{user?.phone || 'Not provided'}</span>
+                    </div>
+                    
+                    <button onClick={() => setEditing(true)} className="edit-btn">
+                      Edit Information
+                    </button>
+                  </div>
+                ) : (
+                  <form onSubmit={handleProfileSubmit} className="edit-form">
+                    <div className="form-group">
+                      <label htmlFor="first_name">First Name</label>
+                      <input
+                        type="text"
+                        id="first_name"
+                        name="first_name"
+                        value={formData.first_name}
+                        onChange={handleChange}
+                        required
+                      />
+                    </div>
+                    
+                    <div className="form-group">
+                      <label htmlFor="last_name">Last Name</label>
+                      <input
+                        type="text"
+                        id="last_name"
+                        name="last_name"
+                        value={formData.last_name}
+                        onChange={handleChange}
+                        required
+                      />
+                    </div>
+                    
+                    <div className="form-group">
+                      <label htmlFor="phone">Phone Number</label>
+                      <input
+                        type="tel"
+                        id="phone"
+                        name="phone"
+                        value={formData.phone}
+                        onChange={handleChange}
+                        placeholder="+1 (555) 123-4567"
+                      />
+                    </div>
+                    
+                    <div className="form-actions">
+                      <button type="submit" className="save-btn">
+                        Save Changes
+                      </button>
+                      <button 
+                        type="button" 
+                        onClick={() => setEditing(false)}
+                        className="cancel-btn"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                )}
               </div>
-            </>
-          )}
-        </div>
-      )}
-      
-      {/* Payment History */}
-      {activeTab === 'payments' && (
-        <div>
-          <h3>Payment History</h3>
-          
-          {loading.registrations ? (
-            <p>Loading your payment history...</p>
-          ) : error.registrations ? (
-            <div>{error.registrations}</div>
-          ) : registrations.length === 0 ? (
-            <p>No payment history available.</p>
-          ) : (
-            <div>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Event</th>
-                    <th>Date</th>
-                    <th>Amount</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {registrations.map((reg) => (
-                    <tr key={reg.id}>
-                      <td>{reg.event_title}</td>
-                      <td>{formatDate(reg.created_at)}</td>
-                      <td>${reg.total_price?.toFixed(2) || '0.00'}</td>
-                      <td>{reg.status}</td>
-                      <td>
-                        <button onClick={() => navigate(`/registrations/${reg.id}`)}>
-                          View
+
+              {/* Security Settings */}
+              <div className="settings-card">
+                <h3>Security</h3>
+                
+                {!changingPassword ? (
+                  <div className="security-info">
+                    <p>Keep your account secure with a strong password.</p>
+                    <button 
+                      onClick={() => setChangingPassword(true)}
+                      className="change-password-btn"
+                    >
+                      Change Password
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    {error.password && (
+                      <div className="error-message">
+                        <span className="error-icon">&#9888;&#65039;</span>
+                        {error.password}
+                      </div>
+                    )}
+                    
+                    <form onSubmit={handlePasswordSubmit} className="password-form">
+                      <div className="form-group">
+                        <label htmlFor="current_password">Current Password</label>
+                        <input
+                          type="password"
+                          id="current_password"
+                          name="current_password"
+                          value={passwordData.current_password}
+                          onChange={handlePasswordChange}
+                          required
+                        />
+                      </div>
+                      
+                      <div className="form-group">
+                        <label htmlFor="new_password">New Password</label>
+                        <input
+                          type="password"
+                          id="new_password"
+                          name="new_password"
+                          value={passwordData.new_password}
+                          onChange={handlePasswordChange}
+                          required
+                          minLength="6"
+                        />
+                      </div>
+                      
+                      <div className="form-group">
+                        <label htmlFor="confirm_password">Confirm New Password</label>
+                        <input
+                          type="password"
+                          id="confirm_password"
+                          name="confirm_password"
+                          value={passwordData.confirm_password}
+                          onChange={handlePasswordChange}
+                          required
+                          minLength="6"
+                        />
+                      </div>
+                      
+                      <div className="form-actions">
+                        <button type="submit" className="save-btn">
+                          Update Password
                         </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
-      
-      {/* Feedback History */}
-      {activeTab === 'feedback' && (
-        <div>
-          <h3>Feedback History</h3>
-          
-          {loading.feedback ? (
-            <p>Loading your feedback history...</p>
-          ) : error.feedback ? (
-            <div>{error.feedback}</div>
-          ) : feedbacks.length === 0 ? (
-            <p>You haven't provided feedback for any events yet.</p>
-          ) : (
-            <div>
-              {feedbacks.map((feedback) => (
-                <div key={feedback.id}>
-                  <h5>{feedback.event?.title || 'Unknown Event'}</h5>
-                  <div>
-                    Rating: {feedback.rating}/5
+                        <button 
+                          type="button" 
+                          onClick={() => setChangingPassword(false)}
+                          className="cancel-btn"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
                   </div>
-                  <p>{feedback.comment}</p>
-                  <p>Submitted on: {formatDate(feedback.created_at)}</p>
+                )}
+              </div>
+
+              {/* Notification Preferences */}
+              <div className="settings-card">
+                <h3>Notifications</h3>
+                
+                <form onSubmit={handleNotifSubmit} className="notifications-form">
+                  <div className="preference-item">
+                    <div className="preference-info">
+                      <label htmlFor="email_updates">Email Updates</label>
+                      <p>Receive updates about your event registrations</p>
+                    </div>
+                    <label className="toggle">
+                      <input
+                        type="checkbox"
+                        id="email_updates"
+                        name="email_updates"
+                        checked={notifPreferences.email_updates}
+                        onChange={handleNotifChange}
+                      />
+                      <span className="slider"></span>
+                    </label>
+                  </div>
                   
-                  <div>
-                    <button onClick={() => navigate(`/events/${feedback.event_id}`)}>
-                      View Event
-                    </button>
-                    <button onClick={() => navigate(`/feedback/${feedback.id}/edit`)}>
-                      Edit Feedback
-                    </button>
+                  <div className="preference-item">
+                    <div className="preference-info">
+                      <label htmlFor="event_reminders">Event Reminders</label>
+                      <p>Get reminded about upcoming events you're attending</p>
+                    </div>
+                    <label className="toggle">
+                      <input
+                        type="checkbox"
+                        id="event_reminders"
+                        name="event_reminders"
+                        checked={notifPreferences.event_reminders}
+                        onChange={handleNotifChange}
+                      />
+                      <span className="slider"></span>
+                    </label>
                   </div>
-                </div>
-              ))}
+                  
+                  <div className="preference-item">
+                    <div className="preference-info">
+                      <label htmlFor="marketing">Marketing Communications</label>
+                      <p>Receive information about new events and features</p>
+                    </div>
+                    <label className="toggle">
+                      <input
+                        type="checkbox"
+                        id="marketing"
+                        name="marketing"
+                        checked={notifPreferences.marketing}
+                        onChange={handleNotifChange}
+                      />
+                      <span className="slider"></span>
+                    </label>
+                  </div>
+                  
+                  <button type="submit" className="save-preferences-btn">
+                    Save Preferences
+                  </button>
+                </form>
+              </div>
             </div>
-          )}
-        </div>
-      )}
-      
-      {/* Notification Preferences */}
-      {activeTab === 'notifications' && (
-        <div>
-          <h3>Notification Preferences</h3>
-          
-          <form onSubmit={handleNotifSubmit}>
-            <div>
-              <input
-                type="checkbox"
-                id="email_updates"
-                name="email_updates"
-                checked={notifPreferences.email_updates}
-                onChange={handleNotifChange}
-              />
-              <label htmlFor="email_updates">
-                Receive email updates about my registrations
-              </label>
-            </div>
-            
-            <div>
-              <input
-                type="checkbox"
-                id="event_reminders"
-                name="event_reminders"
-                checked={notifPreferences.event_reminders}
-                onChange={handleNotifChange}
-              />
-              <label htmlFor="event_reminders">
-                Receive event reminders
-              </label>
-            </div>
-            
-            <div>
-              <input
-                type="checkbox"
-                id="marketing"
-                name="marketing"
-                checked={notifPreferences.marketing}
-                onChange={handleNotifChange}
-              />
-              <label htmlFor="marketing">
-                Receive marketing communications about other events
-              </label>
-            </div>
-            
-            <button type="submit">Save Preferences</button>
-          </form>
-        </div>
-      )}
+          </div>
+        )}
+      </main>
     </div>
   );
 }
