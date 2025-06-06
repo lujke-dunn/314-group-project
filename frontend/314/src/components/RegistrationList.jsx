@@ -1,4 +1,3 @@
-// src/components/RegistrationList.jsx
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
@@ -37,7 +36,6 @@ function RegistrationList() {
     fetchRegistrations();
   }, [isAuthenticated, navigate]);
 
-  // Filter registrations based on status
   useEffect(() => {
     if (statusFilter === 'all') {
       setFilteredRegistrations(registrations);
@@ -46,14 +44,12 @@ function RegistrationList() {
     }
   }, [statusFilter, registrations]);
 
-  // Format date function
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     const date = new Date(dateString);
     return date.toLocaleDateString() + ' at ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  // Calculate stats
   const totalRegistrations = registrations.length;
   const confirmedCount = registrations.filter(reg => reg.status === 'confirmed').length;
   const pendingCount = registrations.filter(reg => reg.status === 'pending').length;
@@ -90,14 +86,12 @@ function RegistrationList() {
   return (
     <div className="registrations-wrapper">
       <div className="registrations-container">
-        {/* Header */}
         <div className="registrations-header">
           <h1 className="registrations-title">My Registrations</h1>
           <p className="registrations-subtitle">
             Manage all your event registrations and tickets in one place
           </p>
           
-          {/* Stats */}
           {totalRegistrations > 0 && (
             <div className="registrations-stats">
               <div className="stat-item">
@@ -130,7 +124,6 @@ function RegistrationList() {
           </div>
         ) : (
           <>
-            {/* Filter Section */}
             <div className="filter-section">
               <div className="filter-group">
                 <label className="filter-label">Filter by status:</label>
@@ -152,7 +145,6 @@ function RegistrationList() {
               </div>
             </div>
 
-            {/* Registrations Grid */}
             <div className="registrations-grid">
               {filteredRegistrations.map(reg => (
                 <div key={reg.id} className="registration-card">

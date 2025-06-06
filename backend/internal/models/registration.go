@@ -1,4 +1,3 @@
-// registration.go
 package models
 
 import (
@@ -7,7 +6,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// RegistrationStatus defines the status of a registration
 type RegistrationStatus string
 
 const (
@@ -16,7 +14,6 @@ const (
 	RegistrationStatusCanceled  RegistrationStatus = "canceled"
 )
 
-// Registration represents a user's registration for an event
 type Registration struct {
 	Base
 	UserID       uint               `json:"user_id"`
@@ -32,14 +29,12 @@ type Registration struct {
 	Payments   []Payment  `gorm:"foreignKey:RegistrationID" json:"payments,omitempty"`
 }
 
-// TableName specifies the table name for Registration model
 func (Registration) TableName() string {
 	return "registrations"
 }
 
-// BeforeCreate is a GORM hook that's called before creating a registration
+
 func (r *Registration) BeforeCreate(tx *gorm.DB) error {
-	// Check if tickets are available
 	var ticketType TicketType
 	if err := tx.First(&ticketType, r.TicketTypeID).Error; err != nil {
 		return err
@@ -58,33 +53,27 @@ func (r *Registration) BeforeCreate(tx *gorm.DB) error {
 	if !ticketType.IsOnSale() {
 		return errors.New("tickets not on sale")
 	}
-
-	// Set the total price from the ticket type
 	r.TotalPrice = ticketType.Price
 
 	return nil
 }
 
-// Confirm confirms the registration
 func (r *Registration) Confirm(db *gorm.DB) error {
 	r.Status = RegistrationStatusConfirmed
 	return db.Save(r).Error
 }
 
-// Cancel cancels the registration
 func (r *Registration) Cancel(db *gorm.DB) error {
 	r.Status = RegistrationStatusCanceled
 	return db.Save(r).Error
 }
 
-// GetPayments returns payments for this registration
 func (r *Registration) GetPayments(db *gorm.DB) ([]Payment, error) {
 	var payments []Payment
 	result := db.Where("registration_id = ?", r.ID).Find(&payments)
 	return payments, result.Error
 }
 
-// FindRegistrationByID finds a registration by ID
 func FindRegistrationByID(db *gorm.DB, id uint) (*Registration, error) {
 	var registration Registration
 	result := db.First(&registration, id)
@@ -94,21 +83,18 @@ func FindRegistrationByID(db *gorm.DB, id uint) (*Registration, error) {
 	return &registration, nil
 }
 
-// FindRegistrationsByUser finds registrations by user
 func FindRegistrationsByUser(db *gorm.DB, userID uint) ([]Registration, error) {
 	var registrations []Registration
 	result := db.Where("user_id = ?", userID).Order("created_at DESC").Find(&registrations)
 	return registrations, result.Error
 }
 
-// FindRegistrationsByEvent finds registrations by event
 func FindRegistrationsByEvent(db *gorm.DB, eventID uint) ([]Registration, error) {
 	var registrations []Registration
 	result := db.Where("event_id = ?", eventID).Order("created_at DESC").Find(&registrations)
 	return registrations, result.Error
 }
 
-// CreateRegistration creates a new registration
 func CreateRegistration(db *gorm.DB, userID, eventID, ticketTypeID uint) (*Registration, error) {
 	// Check if the ticket type belongs to the event
 	var ticketType TicketType

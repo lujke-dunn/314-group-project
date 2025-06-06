@@ -128,7 +128,29 @@ func (h *TicketTypeHandler) GetTicketTypes(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, ticketTypes)
+	type TicketTypeWithAvailability struct {
+		models.TicketType
+		AvailableQuantity int `json:"available_quantity"`
+		SoldQuantity      int `json:"sold_quantity"`
+	}
+
+	var enrichedTicketTypes []TicketTypeWithAvailability
+	for _, ticket := range ticketTypes {
+		availableQty, err := ticket.GetAvailableQuantity(h.db)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to calculate ticket availability"})
+			return
+		}
+
+		soldQty := ticket.QuantityAvailable - availableQty
+		enrichedTicketTypes = append(enrichedTicketTypes, TicketTypeWithAvailability{
+			TicketType:        ticket,
+			AvailableQuantity: availableQty,
+			SoldQuantity:      soldQty,
+		})
+	}
+
+	c.JSON(http.StatusOK, enrichedTicketTypes)
 }
 
 func (h *TicketTypeHandler) UpdateTicketType(c *gin.Context) {

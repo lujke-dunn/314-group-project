@@ -1,4 +1,3 @@
-// src/components/EventForm.jsx
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
@@ -6,13 +5,12 @@ import api from '../api';
 import './EventForm.css';
 
 function EventForm() {
-  const { id } = useParams(); // Event ID if editing
+  const { id } = useParams();
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
   
   const isEditMode = !!id;
   
-  // Form state
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -34,7 +32,6 @@ function EventForm() {
   const [success, setSuccess] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
   
-  // Progress tracking
   const [currentStep, setCurrentStep] = useState(1);
   
   useEffect(() => {
@@ -43,7 +40,6 @@ function EventForm() {
       return;
     }
     
-    // If editing, fetch existing event data
     if (isEditMode) {
       fetchEventData();
     }
@@ -55,13 +51,11 @@ function EventForm() {
       const response = await api.get(`/events/${id}`);
       const event = response.data;
       
-      // Check if user owns this event
       if (event.user_id !== user.id && !user.is_admin) {
         navigate('/');
         return;
       }
       
-      // Populate form with existing data
       setFormData({
         title: event.title || '',
         description: event.description || '',
@@ -85,11 +79,10 @@ function EventForm() {
     }
   };
   
-  // Format date for datetime-local input
+  // convert date to format that datetime-local input expects
   const formatDateForInput = (dateString) => {
     if (!dateString) return '';
     const date = new Date(dateString);
-    // Format: YYYY-MM-DDTHH:mm in local time
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
@@ -98,7 +91,6 @@ function EventForm() {
     return `${year}-${month}-${day}T${hours}:${minutes}`;
   };
   
-  // Handle form input changes
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFormData(prev => ({
@@ -106,13 +98,11 @@ function EventForm() {
       [name]: type === 'checkbox' ? checked : value
     }));
     
-    // Clear field error when user starts typing
     if (fieldErrors[name]) {
       setFieldErrors(prev => ({ ...prev, [name]: '' }));
     }
   };
   
-  // Validate form
   const validateForm = () => {
     const errors = {};
     
@@ -151,6 +141,9 @@ function EventForm() {
       if (!formData.state.trim()) {
         errors.state = 'State is required for in-person events';
       }
+      if (formData.zip_code && !/^\d{4}$/.test(formData.zip_code)) {
+        errors.zip_code = 'Postcode must be 4 digits';
+      }
     }
     
     if (formData.max_attendees && parseInt(formData.max_attendees) < 1) {
@@ -161,7 +154,6 @@ function EventForm() {
     return Object.keys(errors).length === 0;
   };
   
-  // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -193,7 +185,6 @@ function EventForm() {
       
       console.log('Event response:', response.data);
       
-      // Redirect to event detail page after short delay
       setTimeout(() => {
         const eventId = response.data.id || response.data.ID || response.data.Id;
         console.log('Navigating to event:', eventId);
@@ -213,7 +204,7 @@ function EventForm() {
   };
   
   
-  // Progress step calculation
+
   const calculateProgress = () => {
     let filledFields = 0;
     const requiredFields = ['title', 'description', 'start_datetime', 'end_datetime', 'venue'];
@@ -245,7 +236,6 @@ function EventForm() {
   return (
     <div className="event-form-wrapper">
       <div className="event-form-container">
-        {/* Header */}
         <div className="form-header">
           <h1 className="form-title">
             {isEditMode ? 'Edit Event' : 'Create New Event'}
@@ -258,7 +248,6 @@ function EventForm() {
           </p>
         </div>
         
-        {/* Progress Indicator */}
         <div className="progress-indicator">
           <div className="progress-step">
             <div className={`step-circle ${calculateProgress() >= 33 ? 'active' : ''} ${calculateProgress() === 100 ? 'completed' : ''}`}>
@@ -280,7 +269,6 @@ function EventForm() {
           </div>
         </div>
         
-        {/* Error Message */}
         {error && (
           <div className="error-message">
             <span className="error-icon">&#9888;&#65039;</span>
@@ -288,7 +276,6 @@ function EventForm() {
           </div>
         )}
         
-        {/* Success Message */}
         {success && (
           <div className="success-message">
             <span className="success-icon">✅</span>
@@ -297,7 +284,6 @@ function EventForm() {
         )}
         
         <form onSubmit={handleSubmit}>
-          {/* Basic Information Section */}
           <section className="form-section">
             <h2 className="section-title">
               <span className="section-icon">&#128221;</span>
@@ -387,7 +373,6 @@ function EventForm() {
             </div>
           </section>
           
-          {/* Date & Location Section */}
           <section className="form-section">
             <h2 className="section-title">
               <span className="section-icon">&#128197;</span>
@@ -502,7 +487,7 @@ function EventForm() {
                         value={formData.city}
                         onChange={handleChange}
                         className={`form-input ${fieldErrors.city ? 'error' : ''}`}
-                        placeholder="San Francisco"
+                        placeholder="Wollongong"
                       />
                       {fieldErrors.city && (
                         <span className="field-error">
@@ -522,19 +507,18 @@ function EventForm() {
                         value={formData.state}
                         onChange={handleChange}
                         className={`form-input ${fieldErrors.state ? 'error' : ''}`}
-                        placeholder="CA"
-                        maxLength="2"
+                        placeholder="NSW"
                       />
                       {fieldErrors.state && (
                         <span className="field-error">
-                          <span>&#9888;&#65039;</span> {fieldErrors.state}
+                          <span>⚠️</span> {fieldErrors.state}
                         </span>
                       )}
                     </div>
                     
                     <div className="form-group">
                       <label htmlFor="zip_code" className="form-label">
-                        ZIP Code
+                        Postcode
                       </label>
                       <input
                         type="text"
@@ -542,10 +526,16 @@ function EventForm() {
                         name="zip_code"
                         value={formData.zip_code}
                         onChange={handleChange}
-                        className="form-input"
-                        placeholder="94105"
-                        maxLength="10"
+                        className={`form-input ${fieldErrors.zip_code ? 'error' : ''}`}
+                        placeholder="2500"
+                        maxLength="4"
+                        pattern="\d{4}"
                       />
+                      {fieldErrors.zip_code && (
+                        <span className="field-error">
+                          <span>⚠️</span> {fieldErrors.zip_code}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -554,14 +544,13 @@ function EventForm() {
           </section>
           
           
-          {/* Form Actions */}
           <div className="form-actions">
             <button
               type="button"
               onClick={() => navigate(-1)}
               className="form-button button-secondary"
             >
-              <span>&#8592;</span>
+              <span>←</span>
               Cancel
             </button>
             
@@ -573,12 +562,12 @@ function EventForm() {
               >
                 {saving ? (
                   <>
-                    <span>&#8987;</span>
+                    <span>⏳</span>
                     Saving...
                   </>
                 ) : (
                   <>
-                    <span>{isEditMode ? '&#128190;' : '&#127881;'}</span>
+                    <span>{isEditMode ? '💾' : '🎉'}</span>
                     {isEditMode ? 'Update Event' : 'Create Event'}
                   </>
                 )}

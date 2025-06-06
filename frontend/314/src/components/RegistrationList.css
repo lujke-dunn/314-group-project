@@ -1,4 +1,3 @@
-/* RegistrationList.css - Premium registrations list design */
 
 .registrations-wrapper {
   min-height: 100vh;
@@ -12,7 +11,6 @@
   padding: 0 2rem;
 }
 
-/* Header Section */
 .registrations-header {
   text-align: center;
   margin-bottom: 3rem;
@@ -59,7 +57,6 @@
   font-weight: var(--font-medium);
 }
 
-/* Filter Section */
 .filter-section {
   background: var(--color-surface);
   padding: 1.5rem 2rem;
@@ -101,7 +98,6 @@
   box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
 }
 
-/* Registrations Grid */
 .registrations-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
@@ -278,7 +274,6 @@
   background: rgba(139, 92, 246, 0.05);
 }
 
-/* Empty State */
 .empty-state {
   text-align: center;
   padding: 4rem 2rem;
@@ -330,7 +325,6 @@
   box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
 }
 
-/* Loading State */
 .loading-state {
   display: flex;
   flex-direction: column;
@@ -354,7 +348,6 @@
   to { transform: rotate(360deg); }
 }
 
-/* Error State */
 .error-state {
   background: var(--color-error-bg);
   color: var(--color-error);
@@ -373,7 +366,6 @@
   font-size: var(--text-xl);
 }
 
-/* Animations */
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -385,7 +377,6 @@
   }
 }
 
-/* Responsive Design */
 @media (max-width: 768px) {
   .registrations-container {
     padding: 0 1.5rem;

@@ -5,7 +5,7 @@ import api from '../api';
 import './EventDetails.css';
 
 function EventDetail() {
-  const { id } = useParams(); // Get event ID from URL
+  const { id } = useParams();
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
   
@@ -15,58 +15,73 @@ function EventDetail() {
   const [error, setError] = useState('');
   const [selectedTicket, setSelectedTicket] = useState(null);
   
-  // Feedback state
   const [feedbacks, setFeedbacks] = useState([]);
   const [comment, setComment] = useState('');
   const [rating, setRating] = useState(5);
   const [submittingComment, setSubmittingComment] = useState(false);
   const [feedbackError, setFeedbackError] = useState('');
   const [publishing, setPublishing] = useState(false);
+  const [canceling, setCanceling] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [registrations, setRegistrations] = useState([]);
+  const [loadingRegistrations, setLoadingRegistrations] = useState(false);
+
+  const fetchEventDetails = async () => {
+    try {
+      const eventResponse = await api.get(`/events/${id}`);
+      setEvent(eventResponse.data);
+      
+      const ticketsResponse = await api.get(`/events/${id}/ticket-types`);
+      setTicketTypes(ticketsResponse.data);
+      
+      try {
+        const feedbackResponse = await api.get(`/events/${id}/feedback`);
+        setFeedbacks(feedbackResponse.data.feedbacks || []);
+      } catch (err) {
+        console.error('Failed to fetch feedback:', err);
+      }
+      
+      setLoading(false);
+    } catch (err) {
+      console.error('Failed to fetch event details:', err);
+      setError('Failed to load event details. Please try again later.');
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchEventDetails = async () => {
-      try {
-        // Fetch event details
-        const eventResponse = await api.get(`/events/${id}`);
-        setEvent(eventResponse.data);
-        
-        // Fetch ticket types for this event
-        const ticketsResponse = await api.get(`/events/${id}/ticket-types`);
-        setTicketTypes(ticketsResponse.data);
-        
-        // Fetch event feedback/comments
-        try {
-          const feedbackResponse = await api.get(`/events/${id}/feedback`);
-          setFeedbacks(feedbackResponse.data.feedbacks || []);
-        } catch (err) {
-          console.error('Failed to fetch feedback:', err);
-          // Don't fail the whole page if just feedback loading fails
-        }
-        
-        setLoading(false);
-      } catch (err) {
-        console.error('Failed to fetch event details:', err);
-        setError('Failed to load event details. Please try again later.');
-        setLoading(false);
-      }
-    };
-
     fetchEventDetails();
   }, [id]);
 
-  // Format date for display
+  useEffect(() => {
+    if (event && event.user_id === user?.id) {
+      fetchRegistrations();
+    }
+  }, [event, user]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (!loading) {
+        fetchEventDetails();
+        if (event && event.user_id === user?.id) {
+          fetchRegistrations();
+        }
+      }
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [id, loading, event, user]);
+
   const formatDate = (dateString) => {
     if (!dateString) return 'TBA';
     const date = new Date(dateString);
     return date.toLocaleDateString() + ' at ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  // Handle ticket selection
   const handleSelectTicket = (ticketId) => {
     setSelectedTicket(ticketId);
   };
 
-  // Handle registration
   const handleRegister = async () => {
     if (!isAuthenticated) {
       navigate('/login');
@@ -84,7 +99,7 @@ function EventDetail() {
         ticket_type_id: selectedTicket
       });
       
-      // Navigate to registration confirmation
+      await fetchEventDetails();
       navigate(`/registrations/${response.data.registration.id}`);
     } catch (err) {
       console.error('Registration failed:', err);
@@ -92,7 +107,6 @@ function EventDetail() {
     }
   };
   
-  // Handle publishing event
   const handlePublishEvent = async () => {
     if (!isAuthenticated) {
       navigate('/login');
@@ -103,7 +117,6 @@ function EventDetail() {
     try {
       const response = await api.put(`/events/${id}/publish`);
       console.log('Publish response:', response.data);
-      // Update the event state to reflect it's now published
       setEvent(prev => ({ ...prev, is_published: true }));
       setError('');
       console.log('Event updated to published');
@@ -115,7 +128,54 @@ function EventDetail() {
     }
   };
 
-  // Handle submitting feedback
+  const handleCancelEvent = async () => {
+    if (!isAuthenticated) {
+      navigate('/login');
+      return;
+    }
+    
+    setCanceling(true);
+    try {
+      const response = await api.put(`/events/${id}/cancel`, { reason: 'Event canceled by organizer' });
+      console.log('Cancel response:', response.data);
+      setEvent(prev => ({ ...prev, is_canceled: true }));
+      setError('');
+      setShowCancelModal(false);
+      console.log('Event updated to canceled');
+    } catch (err) {
+      console.error('Failed to cancel event:', err);
+      setError(err.response?.data?.error || 'Failed to cancel event. Please try again.');
+    } finally {
+      setCanceling(false);
+    }
+  };
+
+  const fetchRegistrations = async () => {
+    if (!event || event.user_id !== user?.id) return;
+    
+    setLoadingRegistrations(true);
+    try {
+      const response = await api.get(`/events/${id}/registrations`);
+      console.log('Registrations response:', response.data);
+      setRegistrations(response.data.registrations || []);
+    } catch (err) {
+      console.error('Failed to fetch registrations:', err);
+    } finally {
+      setLoadingRegistrations(false);
+    }
+  };
+
+  const handleUpdateRegistrationStatus = async (registrationId, status) => {
+    try {
+      await api.put(`/registrations/${registrationId}/status`, { status });
+      await fetchRegistrations();
+      await fetchEventDetails();
+    } catch (err) {
+      console.error('Failed to update registration status:', err);
+      setError(err.response?.data?.error || 'Failed to update registration status');
+    }
+  };
+
   const handleSubmitFeedback = async (e) => {
     e.preventDefault();
     
@@ -138,7 +198,7 @@ function EventDetail() {
         comment: comment
       });
       
-      // Add the new feedback to the list
+      // add new comment to top of list without refetching
       setFeedbacks([
         {
           id: response.data.feedback.id,
@@ -154,7 +214,6 @@ function EventDetail() {
         ...feedbacks
       ]);
       
-      // Clear the form
       setComment('');
       setRating(5);
       setSubmittingComment(false);
@@ -169,7 +228,6 @@ function EventDetail() {
     }
   };
 
-  // Get user initials for avatar
   const getUserInitials = (user) => {
     if (!user) return '?';
     const firstInitial = user.first_name?.[0] || '';
@@ -177,7 +235,6 @@ function EventDetail() {
     return (firstInitial + lastInitial).toUpperCase() || user.email?.[0]?.toUpperCase() || '?';
   };
 
-  // Render star rating
   const renderStars = (rating) => {
     return Array.from({ length: 5 }, (_, i) => (
       <span key={i} className={`star ${i < rating ? '' : 'empty'}`}>
@@ -221,17 +278,14 @@ function EventDetail() {
 
   return (
     <div className="event-detail-wrapper">
-      {/* Back Navigation */}
       <div className="back-nav">
         <button onClick={() => navigate(-1)} className="back-button">
           <span className="back-icon">&#8592;</span>
           Back to Events
         </button>
       </div>
-      {/* Main Content */}
       <div className="event-content">
         <div className="main-content">
-          {/* Event Info Section */}
           <section className="description-section">
             {event.is_canceled && (
               <div className="event-status-banner">
@@ -260,7 +314,6 @@ function EventDetail() {
         </div>
         
         <div className="sidebar-content">
-          {/* Tickets Section */}
           {!event.is_canceled && (
             <section className="tickets-section">
               <h2 className="section-title">
@@ -275,7 +328,7 @@ function EventDetail() {
                 </div>
               )}
               
-              {ticketTypes.length === 0 ? (
+              {!ticketTypes || ticketTypes.length === 0 ? (
                 <div className="no-tickets">
                   <div className="no-tickets-icon">&#127915;</div>
                   <p>No tickets available for this event.</p>
@@ -303,7 +356,7 @@ function EventDetail() {
                             <h4>{ticket.name}</h4>
                             <p className="ticket-description">{ticket.description}</p>
                             <p className="ticket-availability">
-                              {ticket.quantity_available} tickets available
+                              {ticket.available_quantity} tickets available
                             </p>
                           </div>
                           <div className="ticket-price">
@@ -328,7 +381,6 @@ function EventDetail() {
           )}
         </div>
       </div>
-      {/* Comments Section */}
       <div className="event-content" style={{ marginTop: '4rem' }}>
         <div style={{ gridColumn: '1 / -1' }}>
           <section className="comments-section">
@@ -337,7 +389,6 @@ function EventDetail() {
               Comments & Feedback
             </h2>
             
-            {/* Feedback Form */}
             {isAuthenticated ? (
               <div className="comment-form">
                 <h3>Leave a Comment</h3>
@@ -396,7 +447,6 @@ function EventDetail() {
               </div>
             )}
             
-            {/* Display Feedback */}
             <div className="comments-list-wrapper">
               <h3>What People Are Saying</h3>
               
@@ -434,7 +484,6 @@ function EventDetail() {
           </section>
         </div>
       </div>
-      {/* Event Management Section */}
       {isAuthenticated && event.user_id === user?.id && (
         <div className="event-content">
           <div style={{ gridColumn: '1 / -1' }}>
@@ -459,14 +508,14 @@ function EventDetail() {
                     disabled={publishing}
                     className="management-button primary"
                   >
-                    <span>{publishing ? '&#8987;' : '&#128640;'}</span>
+                    <span>{publishing ? '⏳' : '🚀'}</span>
                     {publishing ? 'Publishing...' : 'Publish Event'}
                   </button>
                 )}
                 
                 {!event.is_canceled && (
                   <button 
-                    onClick={() => navigate(`/events/${id}/cancel`)}
+                    onClick={() => setShowCancelModal(true)}
                     className="management-button danger"
                   >
                     <span>&#10060;</span>
@@ -483,6 +532,71 @@ function EventDetail() {
                 </button>
               </div>
             </section>
+
+            {event && event.user_id === user?.id && (
+              <section className="attendees-section">
+                <h2 className="section-title">
+                  <span className="section-icon">&#128101;</span>
+                  Attendees ({registrations.filter(reg => reg.status === 'confirmed').length})
+                </h2>
+                
+                {loadingRegistrations ? (
+                  <div className="loading-state">
+                    <div className="loading-spinner small"></div>
+                    <p>Loading attendees...</p>
+                  </div>
+                ) : registrations.filter(reg => reg.status === 'confirmed').length === 0 ? (
+                  <p className="no-attendees">No confirmed attendees yet.</p>
+                ) : (
+                  <div className="attendees-list">
+                    {registrations.filter(reg => reg.status === 'confirmed').map(registration => (
+                      <div key={registration.id} className="attendee-item">
+                        <div className="attendee-info">
+                          <div className="attendee-name">
+                            {registration.user?.first_name || 'Unknown'} {registration.user?.last_name || 'User'}
+                          </div>
+                          <div className="attendee-email">{registration.user?.email || 'No email'}</div>
+                          <div className="attendee-ticket">{registration.ticket_type?.name || 'Unknown ticket'}</div>
+                        </div>
+                        <div className="attendee-actions">
+                          <button
+                            onClick={() => handleUpdateRegistrationStatus(registration.id, 'canceled')}
+                            className="attendee-action-button danger"
+                          >
+                            Cancel Registration
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {showCancelModal && (
+        <div className="modal-overlay" onClick={() => setShowCancelModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2>Cancel Event</h2>
+            <p>Are you sure you want to cancel this event? This action cannot be undone.</p>
+            <p className="warning-text">All registered attendees will be notified of the cancellation.</p>
+            <div className="modal-actions">
+              <button 
+                onClick={() => setShowCancelModal(false)}
+                className="modal-button secondary"
+              >
+                Keep Event
+              </button>
+              <button 
+                onClick={handleCancelEvent}
+                className="modal-button danger"
+                disabled={canceling}
+              >
+                {canceling ? 'Canceling...' : 'Yes, Cancel Event'}
+              </button>
+            </div>
           </div>
         </div>
       )}

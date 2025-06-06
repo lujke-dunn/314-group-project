@@ -1,4 +1,3 @@
-// src/components/RegistrationConfirmation.jsx
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
@@ -6,7 +5,7 @@ import api from '../api';
 import './RegistrationConfirmation.css';
 
 function RegistrationConfirmation() {
-  const { id } = useParams(); // Registration ID
+  const { id } = useParams();
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
   
@@ -22,6 +21,7 @@ function RegistrationConfirmation() {
       return;
     }
 
+    // payment flow in order to confirm registation, send email if went through
     const fetchRegistrationDetails = async () => {
       try {
         const response = await api.get(`/registrations/${id}`);
@@ -46,7 +46,6 @@ function RegistrationConfirmation() {
         transaction_id: `TRANS-${Date.now()}`
       });
       
-      // Reload the registration data to show updated status
       const response = await api.get(`/registrations/${id}`);
       setRegistration(response.data.registration);
     } catch (err) {
@@ -59,7 +58,6 @@ function RegistrationConfirmation() {
     try {
       await api.put(`/registrations/${id}/cancel`);
       
-      // Reload the registration data to show updated status
       const response = await api.get(`/registrations/${id}`);
       setRegistration(response.data.registration);
     } catch (err) {
@@ -68,19 +66,17 @@ function RegistrationConfirmation() {
     }
   };
 
-  // Format date function
   const formatDate = (dateString) => {
     if (!dateString) return 'TBA';
     const date = new Date(dateString);
     return date.toLocaleDateString() + ' at ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  // Get status details
   const getStatusDetails = (status) => {
     switch (status) {
       case 'pending':
         return {
-          icon: '&#8987;',
+          icon: '⏳',
           title: 'Payment Pending',
           message: 'Your registration is pending payment. Please complete your payment to confirm your spot at this amazing event.',
           className: 'pending'
@@ -94,14 +90,14 @@ function RegistrationConfirmation() {
         };
       case 'canceled':
         return {
-          icon: '&#10060;',
+          icon: '❌',
           title: 'Registration Canceled',
           message: 'This registration has been canceled. If this was a mistake, please contact support or register again.',
           className: 'canceled'
         };
       default:
         return {
-          icon: '&#10067;',
+          icon: '❓',
           title: 'Unknown Status',
           message: 'Registration status unclear.',
           className: 'pending'
@@ -153,7 +149,6 @@ function RegistrationConfirmation() {
   return (
     <div className="registration-wrapper">
       <div className="registration-container">
-        {/* Header */}
         <div className="registration-header">
           <h1 className="registration-title">Registration Details</h1>
           <p className="registration-subtitle">
@@ -161,7 +156,6 @@ function RegistrationConfirmation() {
           </p>
         </div>
 
-        {/* Status Section */}
         <section className={`status-section ${registration.status === 'confirmed' ? 'success-animation' : ''}`}>
           <span className={`status-icon ${statusDetails.className}`}>
             {statusDetails.icon}
@@ -179,7 +173,6 @@ function RegistrationConfirmation() {
           )}
         </section>
 
-        {/* Ticket Display for Confirmed */}
         {registration.status === 'confirmed' && (
           <>
             <div className="ticket-display">
@@ -196,7 +189,6 @@ function RegistrationConfirmation() {
           </>
         )}
 
-        {/* Event Details */}
         <section className="event-details-section">
           <h2 className="section-title">
             <span className="section-icon">&#127914;</span>
@@ -230,7 +222,6 @@ function RegistrationConfirmation() {
           </div>
         </section>
 
-        {/* Cancel Section */}
         {registration.status !== 'canceled' && (
           <section className="cancel-section">
             <h2 className="section-title">
@@ -248,7 +239,6 @@ function RegistrationConfirmation() {
           </section>
         )}
 
-        {/* Actions */}
         <div className="actions-section">
           <button 
             onClick={() => navigate('/profile')} 

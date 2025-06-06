@@ -29,7 +29,7 @@ func NewEventHandler(emailService *services.EmailService) *EventHandler {
 func (h *EventHandler) CreateEvent(c *gin.Context) {
 	userID, exists := c.Get("userID")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"}) // if getting the userID from context fails return mapped error unauthorized
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
 
@@ -59,6 +59,7 @@ func (h *EventHandler) CreateEvent(c *gin.Context) {
 		return
 	}
 
+	// gotta be in the future
 	if input.EndDateTime.Before(input.StartDateTime) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "End datetime must be after start date and time"})
 		return
@@ -78,7 +79,7 @@ func (h *EventHandler) CreateEvent(c *gin.Context) {
 		ZipCode:       input.ZipCode,
 		Country:       input.Country,
 		IsVirtual:     input.IsVirtual,
-		IsPublished:   true,  // Automatically publish events when created
+		IsPublished:   true,
 		IsCanceled:    false,
 	}
 
@@ -87,21 +88,18 @@ func (h *EventHandler) CreateEvent(c *gin.Context) {
 		return
 	}
 
-	// Reload the event to ensure all fields are populated
 	h.db.First(&event, event.ID)
 	
-	// Send email notification to the organizer
+	// send email
 	user, _ := models.FindUserByID(h.db, userID.(uint))
 	if h.emailService != nil && user != nil {
 		go func() {
 			if err := h.emailService.SendEventCreatedConfirmation(user, &event); err != nil {
-				// Log error but don't fail the request
 				log.Printf("Failed to send event creation email: %v", err)
 			}
 		}()
 	}
 	
-	// Create notification in database
 	models.CreateNotification(
 		h.db,
 		userID.(uint),
@@ -115,9 +113,9 @@ func (h *EventHandler) CreateEvent(c *gin.Context) {
 }
 
 func (h *EventHandler) GetEvent(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 32) // convert event id to non-negative number
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid event ID"}) //
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid event ID"})
 		return
 	}
 
@@ -147,7 +145,8 @@ func (h *EventHandler) GetEvent(c *gin.Context) {
 
 func (h *EventHandler) ListEvents(c *gin.Context) {
 	var events []models.Event
-	query := h.db.Where("is_published = ? AND is_canceled = ?", true, false)
+	query := h.db.Where("is_published = ? AND is_canceled = ?", true, false).
+		Preload("TicketTypes")
 
 	if categoryID, err := strconv.ParseUint(c.Query("category_id"), 10, 32); err == nil {
 		query = query.Where("category_id = ?", categoryID)
@@ -173,6 +172,39 @@ func (h *EventHandler) ListEvents(c *gin.Context) {
 	if searchQuery := c.Query("query"); searchQuery != "" {
 		query = query.Where("title LIKE ? OR DESCRIPTION LIKE ?",
 			"%"+searchQuery+"%", "%"+searchQuery+"%")
+	}
+
+	// Handle event type filter (virtual/physical)
+	if eventType := c.Query("event_type"); eventType != "" {
+		if eventType == "virtual" {
+			query = query.Where("is_virtual = ?", true)
+		} else if eventType == "physical" {
+			query = query.Where("is_virtual = ?", false)
+		}
+	}
+
+	// Handle price range filters
+	minPriceStr := c.Query("min_price")
+	maxPriceStr := c.Query("max_price")
+	
+	if minPriceStr != "" || maxPriceStr != "" {
+		subQuery := h.db.Table("ticket_types").
+			Select("DISTINCT event_id").
+			Where("ticket_types.deleted_at IS NULL")
+		
+		if minPriceStr != "" {
+			if minPrice, err := strconv.ParseFloat(minPriceStr, 64); err == nil {
+				subQuery = subQuery.Where("price >= ?", minPrice)
+			}
+		}
+		
+		if maxPriceStr != "" {
+			if maxPrice, err := strconv.ParseFloat(maxPriceStr, 64); err == nil {
+				subQuery = subQuery.Where("price <= ?", maxPrice)
+			}
+		}
+		
+		query = query.Where("id IN (?)", subQuery)
 	}
 
 	query = query.Order("start_datetime")
@@ -330,54 +362,45 @@ func (h *EventHandler) PublishEvent(c *gin.Context) {
 		}
 	}
 
-	// Check if event is already published
 	if event.IsPublished {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Event is already published"})
 		return
 	}
 
-	// Check if event is canceled
 	if event.IsCanceled {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot publish a canceled event"})
 		return
 	}
 
-	// Publish the event
 	if err := event.Publish(h.db); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to publish event"})
 		return
 	}
 
-	// Reload the event to ensure we return the updated state
 	h.db.First(&event, id)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Event published successfully", "event": event})
 }
 
-// CancelEvent cancels an event
 func (h *EventHandler) CancelEvent(c *gin.Context) {
-	// Get user ID from context
 	userID, exists := c.Get("userID")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
 
-	// Get event ID from URL
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid event ID"})
 		return
 	}
 
-	// Find the event
 	var event models.Event
 	if err := h.db.First(&event, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Event not found"})
 		return
 	}
 
-	// Check if user is the organizer or admin
 	if event.UserID != userID.(uint) {
 		isAdmin, exists := c.Get("isAdmin")
 		if !exists || !isAdmin.(bool) {
@@ -386,13 +409,11 @@ func (h *EventHandler) CancelEvent(c *gin.Context) {
 		}
 	}
 
-	// Check if event is already canceled
 	if event.IsCanceled {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Event is already canceled"})
 		return
 	}
 
-	// Get cancellation reason
 	var input struct {
 		Reason string `json:"reason"`
 	}
@@ -400,40 +421,35 @@ func (h *EventHandler) CancelEvent(c *gin.Context) {
 		input.Reason = "Event canceled by organizer"
 	}
 
-	// Cancel the event
 	if err := event.Cancel(h.db); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to cancel event"})
 		return
 	}
 
-	// TODO: Notify registered attendees of cancellation
+	// todo: notify registered attendees of cancellation
 
 	c.JSON(http.StatusOK, gin.H{"message": "Event canceled successfully", "event": event})
 }
 
 func (h *EventHandler) DeleteEvent(c *gin.Context) {
-	// Get user ID from context
 	userID, exists := c.Get("userID")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
 
-	// Get event ID from URL
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid event ID"})
 		return
 	}
 
-	// Find the event
 	var event models.Event
 	if err := h.db.First(&event, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Event not found"})
 		return
 	}
 
-	// Check if user is the organizer or admin
 	if event.UserID != userID.(uint) {
 		isAdmin, exists := c.Get("isAdmin")
 		if !exists || !isAdmin.(bool) {
@@ -442,13 +458,11 @@ func (h *EventHandler) DeleteEvent(c *gin.Context) {
 		}
 	}
 
-	// Check if event is published
 	if event.IsPublished {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Published events cannot be deleted. Please cancel the event instead."})
 		return
 	}
 
-	// Delete the event
 	if err := h.db.Delete(&event).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete event"})
 		return
@@ -457,9 +471,7 @@ func (h *EventHandler) DeleteEvent(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Event deleted successfully"})
 }
 
-// GetUserEvents retrieves all events created by a specific user
 func (h *EventHandler) GetUserEvents(c *gin.Context) {
-	// Get user ID from context
 	userID, exists := c.Get("userID")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
@@ -469,10 +481,8 @@ func (h *EventHandler) GetUserEvents(c *gin.Context) {
 	var events []models.Event
 	query := h.db.Where("user_id = ?", userID)
 
-	// Apply ordering
 	query = query.Order("created_at DESC")
 
-	// Pagination
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	perPage, _ := strconv.Atoi(c.DefaultQuery("per_page", "10"))
 	offset := (page - 1) * perPage
@@ -480,7 +490,6 @@ func (h *EventHandler) GetUserEvents(c *gin.Context) {
 	var total int64
 	query.Model(&models.Event{}).Count(&total)
 
-	// Fetch events with preloaded ticket types
 	result := query.Preload("TicketTypes").Limit(perPage).Offset(offset).Find(&events)
 	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch events"})

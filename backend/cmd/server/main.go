@@ -1,5 +1,3 @@
-// el main server entry point
-
 package main
 
 import (
@@ -10,56 +8,51 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 
-	//"github.com/golang-jwt/jwt/v5"
 	"lujke-dunn/314-group-project/backend/internal/config"
 	"lujke-dunn/314-group-project/backend/internal/database"
-	//"lujke-dunn/314-group-project/backend/internal/models"
 	"lujke-dunn/314-group-project/backend/internal/handlers"
 	"lujke-dunn/314-group-project/backend/internal/middleware"
 	"lujke-dunn/314-group-project/backend/internal/services"
-	//"gorm.io/gorm"
 )
 
 func main() {
-	// Load configuration
+	// load configuration
 	cfg := config.LoadConfig()
 
-	// Initialize email service
+	// initialize email service
 	emailService := services.NewEmailService(&cfg.SMTP)
 
-	// Set up Gin
 	r := gin.Default()
 
 	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:5173"}, // Your Vite dev server URL
+		AllowOrigins:     []string{"http://localhost:5173"}, // vite dev server
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
 		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
 	}))
-	// Initialize database
+	// initialize database
 	_, err := database.Initialize()
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 
-	// Migrate database schema
+	// migrate database schema
 	err = database.MigrateSchema()
 	if err != nil {
 		log.Fatalf("Failed to migrate database schema: %v", err)
 	}
 
-	// Create handlers
+	// create handlers
 	userHandler := handlers.NewUserHandler()
 	eventHandler := handlers.NewEventHandler(emailService)
 	ticketTypeHandler := handlers.NewTicketTypeHandler()
-	registrationHandler := handlers.NewRegistrationHandler()
+	registrationHandler := handlers.NewRegistrationHandler(emailService)
 	paymentHandler := handlers.NewPaymentHandler(emailService)
 	feedbackHandler := handlers.NewFeedbackHandler()
 	statisticsHandler := handlers.NewStatisticsHandler()
 
-	// health check route / check if server alive
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"status":  "ok",
@@ -68,16 +61,16 @@ func main() {
 		})
 	})
 
-	// Public routes
+	// public routes
 	r.POST("/register", userHandler.RegisterUser)
 	r.POST("/login", userHandler.LoginUser)
 	r.GET("/events/:id/ticket-types", ticketTypeHandler.GetTicketTypes)
 	r.GET("/events", eventHandler.ListEvents)
-	// Protected routes
+	// protected routes
 	authorized := r.Group("/")
 	authorized.Use(middleware.AuthMiddleware())
 	{
-		// User routes
+		// user routes
 		authorized.GET("/profile", userHandler.GetProfile)
 		authorized.PUT("/profile", userHandler.UpdateProfile)
 		authorized.POST("/change-password", userHandler.ChangePassword)
@@ -86,6 +79,8 @@ func main() {
 		authorized.GET("/registrations", registrationHandler.GetUserRegistrations)
 		authorized.GET("/registrations/:id", registrationHandler.GetRegistrationDetails)
 		authorized.PUT("/registrations/:id/cancel", registrationHandler.CancelRegistration)
+		authorized.GET("/events/:id/registrations", registrationHandler.GetEventRegistrations)
+		authorized.PUT("/registrations/:id/status", registrationHandler.UpdateRegistrationStatus)
 
 		authorized.POST("/registrations/:id/payments", paymentHandler.ProcessPayment)
 		authorized.GET("/registrations/:id/payments", paymentHandler.GetPayments)
@@ -96,7 +91,7 @@ func main() {
 		authorized.PUT("/feedback/:id", feedbackHandler.UpdateFeedback)
 		authorized.DELETE("/feedback/:id", feedbackHandler.DeleteFeedback)
 
-		// Admin routes
+		// admin routes
 		admin := authorized.Group("/admin")
 		admin.Use(middleware.AdminRequired())
 		{
@@ -110,7 +105,7 @@ func main() {
 		authorized.POST("/events/create", eventHandler.CreateEvent)
 		authorized.PUT("/events/:id/publish", eventHandler.PublishEvent)
 
-		// Organizer routes - specifically for event management
+		// organizer routes specifically for event management
 		organizer := authorized.Group("/")
 		organizer.Use(middleware.OrganizerRequired())
 		{
@@ -124,7 +119,7 @@ func main() {
 		}
 	}
 
-	// Run the server
+	// run the server
 	log.Println("Starting server on :8080")
 	if err := r.Run(":8080"); err != nil {
 		log.Fatalf("Failed to start server: %v", err)

@@ -1,5 +1,3 @@
-// base model which will be the base case for all the models.
-
 package models
 
 import (

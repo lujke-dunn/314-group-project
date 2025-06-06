@@ -1,4 +1,3 @@
-// src/components/Profile.jsx
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
@@ -9,12 +8,10 @@ function Profile() {
   const { user, isAuthenticated, updateProfile, logout } = useAuth();
   const navigate = useNavigate();
   
-  // State for different data sections
   const [registrations, setRegistrations] = useState([]);
   const [organizedEvents, setOrganizedEvents] = useState([]);
   const [feedbacks, setFeedbacks] = useState([]);
   
-  // UI state
   const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState({
     registrations: true,
@@ -23,7 +20,6 @@ function Profile() {
   });
   const [error, setError] = useState({});
   
-  // Form state for profile editing
   const [editing, setEditing] = useState(false);
   const [formData, setFormData] = useState({
     first_name: '',
@@ -31,7 +27,6 @@ function Profile() {
     phone: ''
   });
   
-  // Password change form state
   const [changingPassword, setChangingPassword] = useState(false);
   const [passwordData, setPasswordData] = useState({
     current_password: '',
@@ -39,7 +34,6 @@ function Profile() {
     confirm_password: ''
   });
   
-  // Notification preferences
   const [notifPreferences, setNotifPreferences] = useState({
     email_updates: true,
     event_reminders: true,
@@ -64,16 +58,14 @@ function Profile() {
   useEffect(() => {
     if (!isAuthenticated) return;
     
-    // Fetch user's registrations
     const fetchData = async () => {
       try {
-        // Fetch registrations
         const regResponse = await api.get('/registrations');
         setRegistrations(regResponse.data || []);
         setLoading(prev => ({ ...prev, registrations: false }));
       } catch (err) {
         console.error('Failed to fetch registrations:', err);
-        setRegistrations([]); // Set empty array on error
+        setRegistrations([]);
         setError(prev => ({ 
           ...prev, 
           registrations: 'Failed to load your event registrations' 
@@ -81,7 +73,6 @@ function Profile() {
         setLoading(prev => ({ ...prev, registrations: false }));
       }
       
-      // Fetch organized events (if user is an organizer)
       if (user?.is_organizer) {
         try {
           const eventsResponse = await api.get('/my-events');
@@ -89,7 +80,7 @@ function Profile() {
           setLoading(prev => ({ ...prev, organized: false }));
         } catch (err) {
           console.error('Failed to fetch organized events:', err);
-          setOrganizedEvents([]); // Set empty array on error
+          setOrganizedEvents([]);
           setError(prev => ({ 
             ...prev, 
             organized: 'Failed to load your organized events' 
@@ -100,14 +91,13 @@ function Profile() {
         setLoading(prev => ({ ...prev, organized: false }));
       }
       
-      // Fetch user's feedback history
       try {
         const feedbackResponse = await api.get('/feedback');
         setFeedbacks(feedbackResponse.data || []);
         setLoading(prev => ({ ...prev, feedback: false }));
       } catch (err) {
         console.error('Failed to fetch feedback:', err);
-        setFeedbacks([]); // Set empty array on error
+        setFeedbacks([]);
         setError(prev => ({ 
           ...prev, 
           feedback: 'Failed to load your feedback history' 
@@ -119,7 +109,6 @@ function Profile() {
     fetchData();
   }, [isAuthenticated, user]);
 
-  // Handle form changes
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
@@ -128,7 +117,6 @@ function Profile() {
     }));
   };
 
-  // Handle password form changes
   const handlePasswordChange = (e) => {
     const { name, value } = e.target;
     setPasswordData(prev => ({
@@ -137,7 +125,6 @@ function Profile() {
     }));
   };
   
-  // Handle notification preferences changes
   const handleNotifChange = (e) => {
     const { name, checked } = e.target;
     setNotifPreferences(prev => ({
@@ -146,7 +133,6 @@ function Profile() {
     }));
   };
 
-  // Update profile
   const handleProfileSubmit = async (e) => {
     e.preventDefault();
     
@@ -161,7 +147,6 @@ function Profile() {
     }
   };
 
-  // Change password
   const handlePasswordSubmit = async (e) => {
     e.preventDefault();
     
@@ -190,14 +175,11 @@ function Profile() {
     }
   };
   
-  // Save notification preferences
   const handleNotifSubmit = async (e) => {
     e.preventDefault();
-    // In a real app, you would send these preferences to the backend
     alert('Notification preferences saved.');
   };
 
-  // Format date helper function
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     const options = { 
@@ -210,7 +192,6 @@ function Profile() {
     return new Date(dateString).toLocaleDateString(undefined, options);
   };
 
-  // Get user initials for avatar
   const getUserInitials = () => {
     if (!user) return 'U';
     const firstInitial = user.first_name?.[0] || '';
@@ -218,7 +199,6 @@ function Profile() {
     return (firstInitial + lastInitial).toUpperCase() || user.email?.[0]?.toUpperCase() || 'U';
   };
 
-  // Calculate stats - handle null/undefined arrays
   const safeRegistrations = registrations || [];
   const safeOrganizedEvents = organizedEvents || [];
   const safeFeedbacks = feedbacks || [];
@@ -232,7 +212,6 @@ function Profile() {
     ? (safeFeedbacks.reduce((sum, f) => sum + f.rating, 0) / safeFeedbacks.length).toFixed(1)
     : 0;
 
-  // Show loading while checking authentication
   if (!isAuthenticated) {
     return (
       <div className="profile-wrapper">
@@ -244,7 +223,6 @@ function Profile() {
     );
   }
 
-  // Show loading if user data isn't loaded yet
   if (!user) {
     return (
       <div className="profile-wrapper">
@@ -258,7 +236,6 @@ function Profile() {
 
   return (
     <div className="profile-wrapper">
-      {/* Hero Section */}
       <section className="profile-hero">
         <div className="hero-background">
           <div className="floating-element element-1"></div>
@@ -293,7 +270,6 @@ function Profile() {
         </div>
       </section>
 
-      {/* Stats Dashboard */}
       <section className="stats-dashboard">
         <div className="stats-grid">
           <div className="stat-card">
@@ -332,7 +308,6 @@ function Profile() {
         </div>
       </section>
 
-      {/* Navigation Tabs */}
       <nav className="profile-nav">
         <div className="nav-container">
           <button 
@@ -371,13 +346,10 @@ function Profile() {
         </div>
       </nav>
 
-      {/* Main Content */}
       <main className="profile-content">
-        {/* Overview Tab */}
         {activeTab === 'overview' && (
           <div className="overview-section">
             <div className="content-grid">
-              {/* Recent Activity */}
               <div className="activity-card">
                 <h3>Recent Activity</h3>
                 <div className="activity-list">
@@ -398,7 +370,6 @@ function Profile() {
                 </div>
               </div>
 
-              {/* Quick Actions */}
               <div className="quick-actions-card">
                 <h3>Quick Actions</h3>
                 <div className="actions-grid">
@@ -426,7 +397,6 @@ function Profile() {
           </div>
         )}
 
-        {/* Events Tab */}
         {activeTab === 'events' && (
           <div className="events-section">
             <div className="section-header">
@@ -504,7 +474,6 @@ function Profile() {
           </div>
         )}
 
-        {/* Organized Events Tab */}
         {activeTab === 'organized' && user?.is_organizer && (
           <div className="organized-section">
             <div className="section-header">
@@ -581,11 +550,9 @@ function Profile() {
           </div>
         )}
 
-        {/* Settings Tab */}
         {activeTab === 'settings' && (
           <div className="settings-section">
             <div className="settings-grid">
-              {/* Personal Information */}
               <div className="settings-card">
                 <h3>Personal Information</h3>
                 {error.profile && (
@@ -668,7 +635,6 @@ function Profile() {
                 )}
               </div>
 
-              {/* Security Settings */}
               <div className="settings-card">
                 <h3>Security</h3>
                 
@@ -747,7 +713,6 @@ function Profile() {
                 )}
               </div>
 
-              {/* Notification Preferences */}
               <div className="settings-card">
                 <h3>Notifications</h3>
                 

@@ -1,4 +1,3 @@
-// migrations.go
 package database
 
 import (
@@ -6,16 +5,13 @@ import (
 	"lujke-dunn/314-group-project/backend/internal/models"
 )
 
-// MigrateSchema creates tables based on the schemas provided in models
 func MigrateSchema() error {
 	if DB == nil {
 		return nil
 	}
 
-	// Enable foreign keys
 	DB.Exec("PRAGMA foreign_keys = ON")
 
-	// First, migrate basic models without dependencies
 	if err := DB.AutoMigrate(&models.User{}); err != nil {
 		return fmt.Errorf("failed to migrate user model: %w ", err)
 	}
@@ -51,9 +47,6 @@ func MigrateSchema() error {
 		return fmt.Errorf("failed to create ticket_types table: %w", err)
 	}
 
-	//return nil
-
-	// Comment out the rest for now so sad migration no workok
 
 	err = DB.Exec(`
         CREATE TABLE IF NOT EXISTS registrations (
@@ -118,17 +111,4 @@ func MigrateSchema() error {
 	}
 
 	return nil
-
-	/*
-
-		if err := DB.AutoMigrate(&models.Notification{}); err != nil {
-			return err
-		}
-
-		if err := DB.AutoMigrate(&models.EventFeedback{}); err != nil {
-			return err
-		}
-
-		return nil
-	*/
 }

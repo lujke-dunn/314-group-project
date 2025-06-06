@@ -1,4 +1,3 @@
-// Signup.jsx
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
@@ -29,10 +28,10 @@ function Signup() {
     e.preventDefault();
     setError('');
     setLoading(true);
-
+    // if register is successful take them to the login page other wise throw error to console
+    // TODO: add error handling to ui
     try {
       await register(formData);
-      // Registration successful, redirect to login
       navigate('/login');
     } catch (err) {
       setError(err.toString());
@@ -43,14 +42,12 @@ function Signup() {
 
   return (
     <div className="signup-wrapper">
-      {/* Animated Background */}
       <div className="auth-background">
         <div className="floating-element element-1"></div>
         <div className="floating-element element-2"></div>
         <div className="floating-element element-3"></div>
       </div>
 
-      {/* Navigation */}
       <nav className="auth-nav">
         <Link to="/" className="logo">EventHub</Link>
         <Link to="/login" className="nav-link">
@@ -58,7 +55,6 @@ function Signup() {
         </Link>
       </nav>
 
-      {/* Main Content */}
       <div className="signup-content">
         <div className="signup-container">
           <div className="signup-header">
@@ -164,13 +160,12 @@ function Signup() {
               )}
             </button>
           </form>
-        
+          
           <div className="form-footer">
             <p>Already have an account? <Link to="/login">Sign in instead</Link></p>
           </div>
         </div>
 
-        {/* Side Features */}
         <div className="auth-features">
           <h2>Why EventHub?</h2>
           <ul className="features-list">

@@ -1,4 +1,3 @@
-// Login.jsx
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
@@ -17,7 +16,7 @@ function Login() {
     e.preventDefault();
     setError('');
     setLoading(true);
-
+    // if successful login navigate to home page
     try {
       await login(email, password);
       navigate('/');
@@ -30,14 +29,12 @@ function Login() {
 
   return (
     <div className="login-wrapper">
-      {/* Animated Background */}
       <div className="auth-background">
         <div className="floating-element element-1"></div>
         <div className="floating-element element-2"></div>
         <div className="floating-element element-3"></div>
       </div>
 
-      {/* Navigation */}
       <nav className="auth-nav">
         <Link to="/" className="logo">EventHub</Link>
         <Link to="/signup" className="nav-link">
@@ -45,7 +42,6 @@ function Login() {
         </Link>
       </nav>
 
-      {/* Main Content */}
       <div className="login-content">
         <div className="login-container">
           <div className="login-header">
@@ -109,7 +105,6 @@ function Login() {
             </button>
           </form>
 
-          {/* Social Proof */}
           <div className="social-proof">
             <div className="proof-item">
               <span className="proof-icon">&#127881;</span>
@@ -127,7 +122,6 @@ function Login() {
           </div>
         </div>
 
-        {/* Side Quote */}
         <div className="auth-quote">
           <blockquote>
             "EventHub is a project by Mon, Viktoriia, Luke, Harpreet, and Tan for our 314 Assignment"

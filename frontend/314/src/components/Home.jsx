@@ -1,4 +1,3 @@
-// src/components/Home.jsx
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
@@ -13,14 +12,14 @@ function Home() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  // call to the backend to get events in order of thier entries within the db
   useEffect(() => {
-    // Fetch upcoming events when component mounts
     const fetchEvents = async () => {
       try {
         const response = await api.get('/events', {
           params: {
             page: 1,
-            per_page: 6 // Limit to 6 events for the homepage
+            per_page: 6
           }
         });
         setEvents(response.data.events);
@@ -39,7 +38,6 @@ function Home() {
     navigate('/profile');
   };
 
-  // Format date function
   const formatDate = (dateString) => {
     const date = new Date(dateString);
     return date.toLocaleDateString() + ' at ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -64,7 +62,6 @@ function Home() {
         )}
       </nav>
 
-      {/* Enhanced Hero Section */}
       <section className="hero-section">
         <div className="hero-background">
           <div className="floating-element element-1"></div>
@@ -113,7 +110,6 @@ function Home() {
         </div>
       </section>
 
-      {/* Features Section */}
       <section className="features-section">
         <div className="features-container">
           <div className="features-header">
@@ -156,7 +152,6 @@ function Home() {
       </section>
 
 
-      {/* Events Section */}
       <section className="events-section">
         <div className="section-header">
           <h2 className="section-title">Trending Events Near You</h2>
@@ -215,7 +210,6 @@ function Home() {
         </div>
       </section>
 
-      {/* CTA Section */}
       <section className="cta-section">
         <div className="cta-container">
           <h2 className="cta-title">Ready to Create Unforgettable Events?</h2>

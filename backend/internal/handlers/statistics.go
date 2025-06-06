@@ -93,7 +93,7 @@ func (h *StatisticsHandler) GetEventStats(c *gin.Context) {
 		}
 	}
 
-	// return registration stats by status pending, confirmed, and cancelled
+	// count registrations by status
 	var pendingCount, confirmedCount, cancelledCount int64
 	h.db.Model(&models.Registration{}).Where("event_id = ? AND status = ?", eventID, models.RegistrationStatusPending).Count(&pendingCount)
 	h.db.Model(&models.Registration{}).Where("event_id = ? AND status = ?", eventID, models.RegistrationStatusConfirmed).Count(&confirmedCount)

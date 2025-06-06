@@ -16,7 +16,10 @@ function EventList() {
     city: '',
     start_date: '',
     end_date: '',
-    category_id: ''
+    category_id: '',
+    event_type: '',
+    min_price: '',
+    max_price: ''
   });
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -55,6 +58,18 @@ function EventList() {
         params.append('category_id', filters.category_id);
       }
       
+      if (filters.event_type) {
+        params.append('event_type', filters.event_type);
+      }
+      
+      if (filters.min_price) {
+        params.append('min_price', filters.min_price);
+      }
+      
+      if (filters.max_price) {
+        params.append('max_price', filters.max_price);
+      }
+      
       const response = await api.get(`/events?${params.toString()}`);
       setEvents(response.data.events || []);
       setTotalPages(response.data.total_pages || 1);
@@ -68,12 +83,12 @@ function EventList() {
   
   const handleSearchChange = (e) => {
     setSearchQuery(e.target.value);
-    setCurrentPage(1); // Reset to first page when searching
+    setCurrentPage(1);
   };
   
   const handleFilterChange = (field, value) => {
     setFilters(prev => ({ ...prev, [field]: value }));
-    setCurrentPage(1); // Reset to first page when filtering
+    setCurrentPage(1);
   };
   
   const handleClearFilters = () => {
@@ -82,7 +97,10 @@ function EventList() {
       city: '',
       start_date: '',
       end_date: '',
-      category_id: ''
+      category_id: '',
+      event_type: '',
+      min_price: '',
+      max_price: ''
     });
     setCurrentPage(1);
   };
@@ -95,6 +113,22 @@ function EventList() {
   
   const handleEventClick = (eventId) => {
     navigate(`/events/${eventId}`);
+  };
+
+  // find the cheapest ticket and then show that as the pruice
+  const getEventMinPrice = (event) => {
+    if (!event.ticket_types || event.ticket_types.length === 0) {
+      return null;
+    }
+    const prices = event.ticket_types.map(ticket => ticket.price);
+    const minPrice = Math.min(...prices);
+    return minPrice;
+  };
+  
+  const formatPrice = (price) => {
+    if (price === null) return 'Price TBA';
+    if (price === 0) return 'Free';
+    return `From $${price.toFixed(2)}`;
   };
   
   const handlePageChange = (page) => {
@@ -115,25 +149,22 @@ function EventList() {
   
   return (
     <div className="events-list-wrapper">
-      {/* Back Navigation */}
       <div className="back-nav">
         <button onClick={() => navigate(-1)} className="back-button">
-          <span className="back-icon">&#8592;</span>
+          <span className="back-icon">←</span>
           Back
         </button>
       </div>
       
-      {/* Header */}
       <div className="events-header">
         <h1 className="page-title">Discover Events</h1>
         <p className="page-subtitle">Find exciting events happening near you</p>
       </div>
       
-      {/* Search and Filters */}
       <div className="search-filters-section">
         <div className="search-bar">
           <div className="search-input-group">
-            <span className="search-icon">&#128269;</span>
+            <span className="search-icon">🔍</span>
             <input
               type="text"
               placeholder="Search events by title or description..."
@@ -179,6 +210,48 @@ function EventList() {
             />
           </div>
           
+          <div className="filter-group">
+            <label htmlFor="event-type-filter">Event Type:</label>
+            <select
+              id="event-type-filter"
+              value={filters.event_type}
+              onChange={(e) => handleFilterChange('event_type', e.target.value)}
+              className="filter-input"
+            >
+              <option value="">All Events</option>
+              <option value="virtual">Virtual Events</option>
+              <option value="physical">In-Person Events</option>
+            </select>
+          </div>
+          
+          <div className="filter-group">
+            <label htmlFor="min-price-filter">Min Price ($):</label>
+            <input
+              id="min-price-filter"
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="0"
+              value={filters.min_price}
+              onChange={(e) => handleFilterChange('min_price', e.target.value)}
+              className="filter-input"
+            />
+          </div>
+          
+          <div className="filter-group">
+            <label htmlFor="max-price-filter">Max Price ($):</label>
+            <input
+              id="max-price-filter"
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="No limit"
+              value={filters.max_price}
+              onChange={(e) => handleFilterChange('max_price', e.target.value)}
+              className="filter-input"
+            />
+          </div>
+          
           <button
             onClick={handleClearFilters}
             className="clear-filters-button"
@@ -188,18 +261,16 @@ function EventList() {
         </div>
       </div>
       
-      {/* Error Message */}
       {error && (
         <div className="error-message">
-          <span className="error-icon">&#9888;&#65039;</span>
+          <span className="error-icon">⚠️</span>
           {error}
         </div>
       )}
       
-      {/* Events Grid */}
       {events.length === 0 && !loading ? (
         <div className="no-events">
-          <div className="no-events-icon">&#128197;</div>
+          <div className="no-events-icon">📅</div>
           <h3>No Events Found</h3>
           <p>
             {searchQuery || Object.values(filters).some(f => f)
@@ -211,7 +282,7 @@ function EventList() {
               onClick={() => navigate('/events/create')}
               className="create-event-button"
             >
-              <span>&#127881;</span>
+              <span>🎉</span>
               Create Your First Event
             </button>
           )}
@@ -228,19 +299,19 @@ function EventList() {
                 <h3 className="event-title">{event.title}</h3>
                 <div className="event-type">
                   <span className={`type-badge ${event.is_virtual ? 'virtual' : 'in-person'}`}>
-                    {event.is_virtual ? '&#128187; Virtual' : '&#128205; In-Person'}
+                    {event.is_virtual ? '💻 Virtual' : '📍 In-Person'}
                   </span>
                 </div>
               </div>
               
               <div className="event-details">
                 <div className="event-datetime">
-                  <span className="detail-icon">&#128197;</span>
+                  <span className="detail-icon">📅</span>
                   <span>{formatDate(event.start_datetime)}</span>
                 </div>
                 
                 <div className="event-location">
-                  <span className="detail-icon">{event.is_virtual ? '&#128187;' : '&#128205;'}</span>
+                  <span className="detail-icon">{event.is_virtual ? '💻' : '📍'}</span>
                   <span>
                     {event.is_virtual 
                       ? event.venue 
@@ -258,13 +329,18 @@ function EventList() {
               </div>
               
               <div className="event-card-footer">
-                <div className="event-tags">
-                  {event.is_virtual && (
-                    <span className="event-tag virtual">&#128187; Virtual</span>
-                  )}
-                  {event.is_canceled && (
-                    <span className="event-tag canceled">&#10060; Canceled</span>
-                  )}
+                <div className="event-info-row">
+                  <div className="event-price">
+                    <span className="price-label">{formatPrice(getEventMinPrice(event))}</span>
+                  </div>
+                  <div className="event-tags">
+                    {event.is_virtual && (
+                      <span className="event-tag virtual">💻 Virtual</span>
+                    )}
+                    {event.is_canceled && (
+                      <span className="event-tag canceled">❌ Canceled</span>
+                    )}
+                  </div>
                 </div>
                 
                 <button className="view-event-button">
@@ -275,8 +351,7 @@ function EventList() {
           ))}
         </div>
       )}
-      
-      {/* Pagination */}
+      {"handle pagination with large quantity of events "}
       {totalPages > 1 && (
         <div className="pagination">
           <button
@@ -284,19 +359,17 @@ function EventList() {
             disabled={currentPage === 1}
             className="pagination-button"
           >
-            &#8592; Previous
+            ← Previous
           </button>
           
           <div className="page-numbers">
             {Array.from({ length: totalPages }, (_, i) => i + 1)
               .filter(page => {
-                // Show first, last, current, and adjacent pages
                 return page === 1 || 
                        page === totalPages || 
                        Math.abs(page - currentPage) <= 1;
               })
               .map((page, index, array) => {
-                // Add ellipsis if there's a gap
                 const showEllipsis = index > 0 && page - array[index - 1] > 1;
                 return (
                   <div key={page}>
@@ -322,7 +395,6 @@ function EventList() {
         </div>
       )}
       
-      {/* Loading indicator for pagination */}
       {loading && events.length > 0 && (
         <div className="pagination-loading">
           <div className="loading-spinner small"></div>

@@ -10,19 +10,16 @@ import (
 	"gorm.io/gorm"
 )
 
-// UserHandler handles user-related requests
 type UserHandler struct {
 	db *gorm.DB
 }
 
-// NewUserHandler creates a new user handler
 func NewUserHandler() *UserHandler {
 	return &UserHandler{
 		db: database.GetDB(),
 	}
 }
 
-// RegisterUser registers a new user
 func (h *UserHandler) RegisterUser(c *gin.Context) {
 	var input struct {
 		Email     string `json:"email" binding:"required,email"`
@@ -37,35 +34,32 @@ func (h *UserHandler) RegisterUser(c *gin.Context) {
 		return
 	}
 
-	// Check if user already exists
+	// no duplicates pls
 	existingUser, _ := models.FindUserByEmail(h.db, input.Email)
 	if existingUser != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "User with this email already exists"})
 		return
 	}
 
-	// Create new user (automatically make them an organizer)
+	// everyone gets to be special (organizer powers)
 	user := models.User{
 		Email:       input.Email,
 		FirstName:   input.FirstName,
 		LastName:    input.LastName,
 		Phone:       input.Phone,
-		IsOrganizer: true,  // Automatically grant organizer privileges
+		IsOrganizer: true,
 	}
 
-	// Set password (this will be hashed)
 	if err := user.SetPassword(input.Password); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to set password"})
 		return
 	}
 
-	// Save user to database
 	if err := h.db.Create(&user).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
 		return
 	}
 
-	// Return user without password
 	c.JSON(http.StatusCreated, gin.H{
 		"id":           user.ID,
 		"email":        user.Email,
@@ -77,7 +71,6 @@ func (h *UserHandler) RegisterUser(c *gin.Context) {
 	})
 }
 
-// LoginUser authenticates a user and returns a JWT token
 func (h *UserHandler) LoginUser(c *gin.Context) {
 	var input struct {
 		Email    string `json:"email" binding:"required,email"`
@@ -89,20 +82,17 @@ func (h *UserHandler) LoginUser(c *gin.Context) {
 		return
 	}
 
-	// Find user by email
 	user, err := models.FindUserByEmail(h.db, input.Email)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		return
 	}
 
-	// Check password
 	if !user.CheckPassword(input.Password) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		return
 	}
 
-	// Create JWT token
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"user_id":     user.ID,
 		"email":       user.Email,
@@ -110,7 +100,6 @@ func (h *UserHandler) LoginUser(c *gin.Context) {
 		"is_organizer": user.IsOrganizer,
 	})
 
-	// Sign the token with a secret key
 	tokenString, err := token.SignedString([]byte("dogpark"))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
@@ -130,16 +119,13 @@ func (h *UserHandler) LoginUser(c *gin.Context) {
 	})
 }
 
-// GetProfile retrieves the authenticated user's profile
 func (h *UserHandler) GetProfile(c *gin.Context) {
-	// Get user ID from context (middleware)
 	userID, exists := c.Get("userID")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
 
-	// Find user by ID
 	user, err := models.FindUserByID(h.db, userID.(uint))
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
@@ -159,16 +145,13 @@ func (h *UserHandler) GetProfile(c *gin.Context) {
 	})
 }
 
-// UpdateProfile updates the authenticated user's profile
 func (h *UserHandler) UpdateProfile(c *gin.Context) {
-	// Get user ID from context (middleware)
 	userID, exists := c.Get("userID")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
 
-	// Find user by ID
 	user, err := models.FindUserByID(h.db, userID.(uint))
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
@@ -186,7 +169,6 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 		return
 	}
 
-	// Update user fields if provided
 	if input.FirstName != "" {
 		user.FirstName = input.FirstName
 	}
@@ -197,7 +179,6 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 		user.Phone = input.Phone
 	}
 
-	// Save changes
 	if err := h.db.Save(user).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update profile"})
 		return
@@ -215,16 +196,13 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 	})
 }
 
-// ChangePassword changes the user's password
 func (h *UserHandler) ChangePassword(c *gin.Context) {
-	// Get user ID from context (set by auth middleware)
 	userID, exists := c.Get("userID")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
 
-	// Find user by ID
 	user, err := models.FindUserByID(h.db, userID.(uint))
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
@@ -241,19 +219,16 @@ func (h *UserHandler) ChangePassword(c *gin.Context) {
 		return
 	}
 
-	// Verify current password
 	if !user.CheckPassword(input.CurrentPassword) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current password is incorrect"})
 		return
 	}
 
-	// Set new password
 	if err := user.SetPassword(input.NewPassword); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to set new password"})
 		return
 	}
 
-	// Save changes
 	if err := h.db.Save(user).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update password"})
 		return
@@ -262,36 +237,30 @@ func (h *UserHandler) ChangePassword(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Password updated successfully"})
 }
 
-// BecomeOrganizer allows a user to become an event organizer
 func (h *UserHandler) BecomeOrganizer(c *gin.Context) {
-	// Get user ID from context (middleware)
 	userID, exists := c.Get("userID")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
 
-	// Find user by ID
 	user, err := models.FindUserByID(h.db, userID.(uint))
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
 	}
 
-	// Check if already an organizer
 	if user.IsOrganizer {
 		c.JSON(http.StatusOK, gin.H{"message": "You are already an organizer"})
 		return
 	}
 
-	// Update user to be an organizer
 	user.IsOrganizer = true
 	if err := h.db.Save(user).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user status"})
 		return
 	}
 
-	// Create new JWT token with updated organizer status
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"user_id":      user.ID,
 		"email":        user.Email,
@@ -299,7 +268,6 @@ func (h *UserHandler) BecomeOrganizer(c *gin.Context) {
 		"is_organizer": user.IsOrganizer,
 	})
 
-	// Sign the token with a secret key
 	tokenString, err := token.SignedString([]byte("dogpark"))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
@@ -319,23 +287,20 @@ func (h *UserHandler) BecomeOrganizer(c *gin.Context) {
 	})
 }
 
-// GetUserByID gets a user by ID (admin only)
 func (h *UserHandler) GetUserByID(c *gin.Context) {
-	// Check if user is admin
 	isAdmin, exists := c.Get("isAdmin")
 	if !exists || !isAdmin.(bool) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Admin access required"})
 		return
 	}
 
-	// Get user ID from URL
 	userID, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
 		return
 	}
 
-	// Find user by ID
+	// find user by id
 	user, err := models.FindUserByID(h.db, uint(userID))
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
@@ -355,9 +320,7 @@ func (h *UserHandler) GetUserByID(c *gin.Context) {
 	})
 }
 
-// ListUsers lists all users (admin only)
 func (h *UserHandler) ListUsers(c *gin.Context) {
-	// Check if user is admin
 	isAdmin, exists := c.Get("isAdmin")
 	if !exists || !isAdmin.(bool) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Admin access required"})
@@ -370,7 +333,6 @@ func (h *UserHandler) ListUsers(c *gin.Context) {
 		return
 	}
 
-	// Transform to response objects without password hash
 	var response []gin.H
 	for _, user := range users {
 		response = append(response, gin.H{

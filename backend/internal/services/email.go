@@ -538,3 +538,99 @@ func (s *EmailService) SendEventCreatedConfirmation(user *models.User, event *mo
 
 	return s.sendEmail(user.Email, subject, body)
 }
+
+func (s *EmailService) SendRegistrationCancellationNotification(user *models.User, eventName string, ticketType string, reason string) error {
+	subject := "Registration Cancelled - " + eventName
+	body := fmt.Sprintf(`
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background-color: #DC3545;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            border-radius: 8px 8px 0 0;
+        }
+        .content {
+            background-color: #f9f9f9;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 0 0 8px 8px;
+        }
+        .details {
+            background-color: white;
+            padding: 15px;
+            margin: 15px 0;
+            border-left: 4px solid #DC3545;
+        }
+        .reason-box {
+            background-color: #F8D7DA;
+            border: 1px solid #F5C6CB;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 5px;
+        }
+        .footer {
+            margin-top: 20px;
+            text-align: center;
+            color: #666;
+            font-size: 12px;
+        }
+        .button {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #007BFF;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Registration Cancelled &#x274C;</h1>
+    </div>
+    <div class="content">
+        <p>Dear %s,</p>
+        <p>We regret to inform you that your registration for <strong>%s</strong> has been cancelled by the event organizer.</p>
+        <div class="details">
+            <h3>Cancelled Registration Details:</h3>
+            <p><strong>Event:</strong> %s</p>
+            <p><strong>Ticket Type:</strong> %s</p>
+            <p><strong>Status:</strong> Cancelled</p>
+        </div>
+        %s
+        <p>If you believe this cancellation was made in error or if you have any questions, please contact the event organizer or our support team.</p>
+        <center>
+            <a href="#" class="button">Browse Other Events</a>
+        </center>
+    </div>
+    <div class="footer">
+        <p>This is an automated notification from the Event Management System.</p>
+        <p>If you have any questions, please contact our support team.</p>
+    </div>
+</body>
+</html>
+`, user.FirstName, eventName, eventName, ticketType, func() string {
+		if reason != "" {
+			return fmt.Sprintf(`<div class="reason-box">
+            <h4>Reason for Cancellation:</h4>
+            <p>%s</p>
+        </div>`, reason)
+		}
+		return ""
+	}())
+
+	return s.sendEmail(user.Email, subject, body)
+}

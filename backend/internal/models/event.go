@@ -1,4 +1,3 @@
-// event model
 package models
 
 import (
@@ -36,19 +35,19 @@ func (Event) TableName() string {
 	return "events"
 }
 
-// Publish marks the event as published
+
 func (e *Event) Publish(db *gorm.DB) error {
 	e.IsPublished = true
 	return db.Save(e).Error
 }
 
-// Cancel marks the event as canceled
+
 func (e *Event) Cancel(db *gorm.DB) error {
 	e.IsCanceled = true
 	return db.Save(e).Error
 }
 
-// AddTicketType adds a new ticket type to the event
+
 func (e *Event) AddTicketType(db *gorm.DB, name, description string, price float64, quantityAvailable int, isVIP bool, saleStartDate, saleEndDate *time.Time) (*TicketType, error) {
 	ticketType := TicketType{
 		EventID:           e.ID,
@@ -69,7 +68,8 @@ func (e *Event) AddTicketType(db *gorm.DB, name, description string, price float
 	return &ticketType, nil
 }
 
-// FindEventByID finds an event by ID
+
+
 func FindEventByID(db *gorm.DB, id uint) (*Event, error) {
 	var event Event
 	result := db.First(&event, id)
@@ -79,21 +79,21 @@ func FindEventByID(db *gorm.DB, id uint) (*Event, error) {
 	return &event, nil
 }
 
-// FindEventsByUser finds events created by a specific user
+
 func FindEventsByUser(db *gorm.DB, userID uint) ([]Event, error) {
 	var events []Event
 	result := db.Where("user_id = ?", userID).Find(&events)
 	return events, result.Error
 }
 
-// FindPublishedEvents finds all published events
+
 func FindPublishedEvents(db *gorm.DB) ([]Event, error) {
 	var events []Event
 	result := db.Where("is_published = ? AND is_canceled = ?", true, false).Find(&events)
 	return events, result.Error
 }
 
-// FindUpcomingEvents finds upcoming events
+
 func FindUpcomingEvents(db *gorm.DB, limit int) ([]Event, error) {
 	var events []Event
 	

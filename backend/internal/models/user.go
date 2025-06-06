@@ -1,4 +1,3 @@
-// user 
 
 package models
 

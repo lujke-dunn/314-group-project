@@ -3,6 +3,8 @@ package handlers
 import (
 	"lujke-dunn/314-group-project/backend/internal/database"
 	"lujke-dunn/314-group-project/backend/internal/models"
+	"lujke-dunn/314-group-project/backend/internal/services"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -11,12 +13,14 @@ import (
 )
 
 type RegistrationHandler struct {
-	db *gorm.DB
+	db           *gorm.DB
+	emailService *services.EmailService
 }
 
-func NewRegistrationHandler() *RegistrationHandler {
+func NewRegistrationHandler(emailService *services.EmailService) *RegistrationHandler {
 	return &RegistrationHandler{
-		db: database.GetDB(),
+		db:           database.GetDB(),
+		emailService: emailService,
 	}
 }
 
@@ -54,6 +58,7 @@ func (h *RegistrationHandler) CreateRegistration(c *gin.Context) {
 		return
 	}
 
+	// check if tickets are available and on sale
 	availableQuantity, err := ticketType.GetAvailableQuantity(h.db)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check ticket availability"})
@@ -80,6 +85,142 @@ func (h *RegistrationHandler) CreateRegistration(c *gin.Context) {
 		"message":      "Registration created successfully",
 		"registration": registration,
 	})
+}
+
+func (h *RegistrationHandler) GetEventRegistrations(c *gin.Context) {
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	eventID, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid event ID"})
+		return
+	}
+
+	var event models.Event
+	if err := h.db.First(&event, eventID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Event not found"})
+		return
+	}
+
+	if event.UserID != userID.(uint) {
+		isAdmin, exists := c.Get("isAdmin")
+		if !exists || !isAdmin.(bool) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to view registrations for this event"})
+			return
+		}
+	}
+
+	var rawRegistrations []models.Registration
+	if err := h.db.Preload("User", func(db *gorm.DB) *gorm.DB {
+		return db.Select("id, first_name, last_name, email")
+	}).Preload("TicketType").Where("event_id = ?", eventID).Find(&rawRegistrations).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch registrations"})
+		return
+	}
+
+	type RegistrationWithDetails struct {
+		models.Registration
+		User       models.User       `json:"user"`
+		TicketType models.TicketType `json:"ticket_type"`
+	}
+
+	var registrations []RegistrationWithDetails
+	for _, reg := range rawRegistrations {
+		registrations = append(registrations, RegistrationWithDetails{
+			Registration: reg,
+			User:         reg.User,
+			TicketType:   reg.TicketType,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"registrations": registrations,
+		"total":         len(rawRegistrations),
+	})
+}
+
+func (h *RegistrationHandler) UpdateRegistrationStatus(c *gin.Context) {
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	registrationID, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid registration ID"})
+		return
+	}
+
+	var registration models.Registration
+	if err := h.db.Preload("Event").First(&registration, registrationID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Registration not found"})
+		return
+	}
+
+	if registration.Event.UserID != userID.(uint) {
+		isAdmin, exists := c.Get("isAdmin")
+		if !exists || !isAdmin.(bool) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to update this registration"})
+			return
+		}
+	}
+
+	var input struct {
+		Status string `json:"status" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if input.Status != string(models.RegistrationStatusConfirmed) && input.Status != string(models.RegistrationStatusCanceled) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Status must be 'confirmed' or 'canceled'"})
+		return
+	}
+
+	originalStatus := registration.Status
+	registration.Status = models.RegistrationStatus(input.Status)
+	if err := h.db.Save(&registration).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update registration"})
+		return
+	}
+
+	// Send email notification based on status change
+	if h.emailService != nil {
+		go func() {
+			var user models.User
+			var event models.Event
+			var ticketType models.TicketType
+			
+			if err := h.db.First(&user, registration.UserID).Error; err == nil {
+				if err := h.db.First(&event, registration.EventID).Error; err == nil {
+					if err := h.db.First(&ticketType, registration.TicketTypeID).Error; err == nil {
+						// Send cancellation email if status changed to canceled
+						if originalStatus != models.RegistrationStatusCanceled && registration.Status == models.RegistrationStatusCanceled {
+							reason := "Registration cancelled by event organizer"
+							if err := h.emailService.SendRegistrationCancellationNotification(&user, event.Title, ticketType.Name, reason); err != nil {
+								log.Printf("Failed to send cancellation email: %v", err)
+							}
+						}
+						// Send confirmation email if status changed to confirmed
+						if originalStatus != models.RegistrationStatusConfirmed && registration.Status == models.RegistrationStatusConfirmed {
+							if err := h.emailService.SendRegistrationConfirmation(&user, event.Title, ticketType.Name); err != nil {
+								log.Printf("Failed to send confirmation email: %v", err)
+							}
+						}
+					}
+				}
+			}
+		}()
+	}
+
+	c.JSON(http.StatusOK, registration)
 }
 
 func (h *RegistrationHandler) GetUserRegistrations(c *gin.Context) {

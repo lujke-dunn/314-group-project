@@ -1,4 +1,3 @@
-// src/components/TicketTypeForm.jsx
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
@@ -6,7 +5,7 @@ import api from '../api';
 import './TicketTypeForm.css';
 
 function TicketTypeForm() {
-  const { id } = useParams(); // Event ID from URL
+  const { id } = useParams();
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
   
@@ -35,15 +34,14 @@ function TicketTypeForm() {
       navigate('/login');
       return;
     }
-    
-    // Check if user is an organizer
+    // somewhat legacy because user is automatically promoted to organizer
+    // when user tries to create new event
     if (!user?.is_organizer && !user?.is_admin) {
       console.log('User is not organizer/admin, redirecting. User:', user);
       navigate('/');
       return;
     }
     
-    // Fetch event details
     fetchEventDetails();
   }, [isAuthenticated, user, navigate, id]);
   
@@ -52,7 +50,6 @@ function TicketTypeForm() {
       const response = await api.get(`/events/${id}`);
       const eventData = response.data;
       
-      // Check if user owns this event
       if (eventData.user_id !== user.id && !user.is_admin) {
         navigate('/');
         return;
@@ -74,20 +71,17 @@ function TicketTypeForm() {
       [name]: type === 'checkbox' ? checked : value
     }));
     
-    // Clear field error when user starts typing
     if (fieldErrors[name]) {
       setFieldErrors(prev => ({ ...prev, [name]: '' }));
     }
   };
   
-  // Format date for display
   const formatDate = (dateString) => {
     if (!dateString) return '';
     const date = new Date(dateString);
     return date.toLocaleString();
   };
   
-  // Validate form
   const validateForm = () => {
     const errors = {};
     
@@ -127,14 +121,12 @@ function TicketTypeForm() {
     setError('');
     setSuccess('');
     
-    // Create data object with correct types
     const ticketData = {
       ...formData,
       price: parseFloat(formData.price),
       quantity_available: parseInt(formData.quantity_available)
     };
     
-    // Format dates if provided, otherwise set to null
     if (formData.sale_start_date && formData.sale_start_date.trim() !== '') {
       const startDate = new Date(formData.sale_start_date);
       ticketData.sale_start_date = startDate.toISOString();
@@ -148,12 +140,13 @@ function TicketTypeForm() {
     } else {
       ticketData.sale_end_date = null;
     }
-    
+
+    // make an api request to the backend to create a ticket type throw
+    // and append it to the DOM.
     try {
       await api.post(`/events/${id}/ticket-types`, ticketData);
       setSuccess('Ticket type created successfully!');
       
-      // Redirect back to event page after short delay
       setTimeout(() => {
         navigate(`/events/${id}`);
       }, 1500);
@@ -179,7 +172,6 @@ function TicketTypeForm() {
   return (
     <div className="ticket-form-wrapper">
       <div className="ticket-form-container">
-        {/* Header */}
         <div className="ticket-form-header">
           <h1 className="ticket-form-title">Add Ticket Type</h1>
           <p className="ticket-form-subtitle">
@@ -187,7 +179,6 @@ function TicketTypeForm() {
           </p>
         </div>
         
-        {/* Event Info Card */}
         {event && (
           <div className="event-info-card">
             <div className="event-info-content">
@@ -200,7 +191,6 @@ function TicketTypeForm() {
           </div>
         )}
         
-        {/* Ticket Preview */}
         {(formData.name || formData.price) && (
           <div className="ticket-preview">
             <div className="preview-header">
@@ -230,7 +220,6 @@ function TicketTypeForm() {
           </div>
         )}
         
-        {/* Error Message */}
         {error && (
           <div className="error-message">
             <span className="error-icon">&#9888;&#65039;</span>
@@ -238,7 +227,6 @@ function TicketTypeForm() {
           </div>
         )}
         
-        {/* Success Message */}
         {success && (
           <div className="success-message">
             <span className="success-icon">✅</span>
@@ -246,11 +234,9 @@ function TicketTypeForm() {
           </div>
         )}
         
-        {/* Form Section */}
         <section className="ticket-form-section">
           <form onSubmit={handleSubmit}>
             <div className="form-grid">
-              {/* Ticket Name */}
               <div className="form-group">
                 <label htmlFor="name" className="form-label">
                   <span className="label-icon">&#127915;</span>
@@ -274,7 +260,6 @@ function TicketTypeForm() {
                 )}
               </div>
               
-              {/* Description */}
               <div className="form-group">
                 <label htmlFor="description" className="form-label">
                   <span className="label-icon">&#128221;</span>
@@ -292,7 +277,6 @@ function TicketTypeForm() {
                 <span className="form-hint">Help attendees understand what this ticket offers</span>
               </div>
               
-              {/* Price and Quantity Row */}
               <div className="form-group">
                 <label htmlFor="price" className="form-label">
                   <span className="label-icon">&#128176;</span>
@@ -341,7 +325,6 @@ function TicketTypeForm() {
                 )}
               </div>
               
-              {/* VIP Toggle */}
               <div className="form-group">
                 <div className="vip-toggle-group">
                   <label className="toggle-switch">
@@ -365,7 +348,6 @@ function TicketTypeForm() {
                 </div>
               </div>
               
-              {/* Sale Dates */}
               <div className="datetime-row">
                 <div className="form-group">
                   <label htmlFor="sale_start_date" className="form-label">
@@ -406,7 +388,6 @@ function TicketTypeForm() {
               </div>
             </div>
             
-            {/* Form Actions */}
             <div className="form-actions">
               <button 
                 type="button" 

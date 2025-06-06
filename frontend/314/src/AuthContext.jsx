@@ -1,34 +1,28 @@
-// AuthContext.jsx
 import { createContext, useState, useContext, useEffect } from 'react';
 import axios from './api';
 
 
-// Create context
 const AuthContext = createContext();
 
-// Custom hook to use the auth context
 export const useAuth = () => useContext(AuthContext);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Initialize auth state from localStorage
   useEffect(() => {
+    // check if user is still logged in on page load
     const initializeAuth = async () => {
       const storedToken = localStorage.getItem('token');
       const storedUser = localStorage.getItem('user');
       
       if (storedToken && storedUser) {
         try {
-          // Set default auth header
           axios.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
           
-          // Validate token by making a request to fetch user profile
           const response = await axios.get('/profile');
           setUser(response.data);
         } catch (error) {
-          // Token is invalid or expired
           console.error('Auth token validation failed:', error);
           logout();
         }
@@ -40,20 +34,16 @@ export function AuthProvider({ children }) {
     initializeAuth();
   }, []);
 
-  // Login function
   const login = async (email, password) => {
     try {
       const response = await axios.post('/login', { email, password });
       const { token, user } = response.data;
       
-      // Save to localStorage
       localStorage.setItem('token', token);
       localStorage.setItem('user', JSON.stringify(user));
       
-      // Set default auth header
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       
-      // Update state
       setUser(user);
       
       return user;
@@ -62,7 +52,6 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // Register function
   const register = async (userData) => {
     try {
       const response = await axios.post('/register', userData);
@@ -72,16 +61,12 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // Logout function
   const logout = () => {
-    // Remove from localStorage
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     
-    // Remove auth header
     delete axios.defaults.headers.common['Authorization'];
     
-    // Update state
     setUser(null);
   };
 
@@ -106,7 +91,6 @@ export function AuthProvider({ children }) {
   };
   
 
-  // Build context value
   const value = {
     user,
     loading,
